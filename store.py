@@ -112,6 +112,8 @@ def _warn_once(key, action, err):
 
 
 ENC_PREFIX = "enc1:"
+OWN_KEYS = ("config", "economy", "personal_economy", "warnings", "activity", "settings", "levels",
+            "balance_history", "diag_healthcheck")
 _fernet_cache = {}
 
 
@@ -203,16 +205,15 @@ def encrypt_everything():
     if not encryption_on():
         raise DataLocked("set GAMBLY_DATA_KEY first")
     done = []
-    if _enabled():
-        r = requests.post(_upstash_url(), headers=_headers(), json=["KEYS", "*"], timeout=15)
-        r.raise_for_status()
-        keys = [k for k in r.json().get("result") or [] if not k.startswith("lock:")]
-    else:
-        keys = [p.stem for p in _LOCAL_BASE.glob("*.json") if not p.name.startswith(".")]
+    keys = list(OWN_KEYS)
     skipped = []
     for k in keys:
         try:
-            save(k, load(k))
+            miss = object()
+            data = load(k, default=miss)
+            if data is miss:
+                continue
+            save(k, data)
             done.append(k)
         except Exception as e:
             skipped.append(f"{k}: {e}")
