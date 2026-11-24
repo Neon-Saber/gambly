@@ -81,6 +81,85 @@ class ConfirmBuild(discord.ui.View):
         self.stop()
 
 
+class KitView(discord.ui.View):
+    def __init__(self, group, roles, exclusive=False):
+        super().__init__(timeout=None)
+        self.group, self.exclusive = group, exclusive
+        for r in roles[:25]:
+            b = discord.ui.Button(label=r['name'][:80], emoji=r.get('emoji') or None, style=discord.ButtonStyle.secondary,
+                                  custom_id=f"kit:{group}:{r['id']}", row=min(len(self.children) // 5, 4))
+            b.callback = self._make(int(r['id']))
+            self.add_item(b)
+
+    def _make(self, rid):
+        async def cb(interaction):
+            role = interaction.guild.get_role(rid)
+            if role is None:
+                return await interaction.response.send_message("that role doesn't exist anymore, ask staff to run /setup roles", ephemeral=True)
+            member = interaction.user
+            try:
+                if role in member.roles:
+                    await member.remove_roles(role, reason="role panel")
+                    msg = f"removed **{role.name}**"
+                else:
+                    if self.exclusive:
+                        kit = (read_cfg(interaction.guild.id).get('role_kit') or {}).get('roles') or {}
+                        same = {int(v) for k, v in kit.items() if k.startswith(self.group + ':')}
+                        old = [r for r in member.roles if r.id in same and r.id != rid]
+                        if old:
+                            await member.remove_roles(*old, reason="role panel swap")
+                    await member.add_roles(role, reason="role panel")
+                    msg = f"gave you **{role.name}**"
+            except discord.Forbidden:
+                msg = "I can't hand that role out - my role has to be above it in server settings"
+            await interaction.response.send_message(msg, ephemeral=True)
+        return cb
+
+
+def kit_panel_roles(group, kit_roles):
+    gdef = next(g for g in sl.ROLE_KIT if g['key'] == group)
+    out = []
+    for r in gdef['roles']:
+        rid = kit_roles.get(f"{group}:{r['slug']}")
+        if rid:
+            out.append({"id": str(rid), "name": r['name'], "emoji": r.get('emoji')})
+    return gdef, out
+
+
+def kit_panel_embed(gdef, roles, accent):
+    e = discord.Embed(title=f"{gdef['emoji']} {gdef['title'].lower()}", color=accent,
+                      description=gdef.get('blurb', '') + "\n\n" + "\n".join(f"{r.get('emoji') or '•'} <@&{r['id']}>" for r in roles))
+    return e
+
+
+class ConfirmRoles(discord.ui.View):
+    def __init__(self, cog, author, groups, channel_id):
+        super().__init__(timeout=120)
+        self.cog, self.author, self.groups, self.channel_id = cog, author, groups, channel_id
+    @discord.ui.button(label="create missing + post panels", emoji="✨", style=discord.ButtonStyle.success)
+    async def go(self, button, interaction):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("not yours", ephemeral=True)
+        await interaction.response.edit_message(content="✨ working on roles…", embed=None, view=None)
+        self.stop()
+        async def progress(line):
+            try:
+                await interaction.edit_original_response(content=f"✨ {line}")
+            except discord.HTTPException:
+                pass
+        res = await self.cog.apply_kit(interaction.guild, self.groups, self.channel_id, progress)
+        try:
+            await interaction.edit_original_response(content=res)
+        except discord.HTTPException:
+            pass
+    @discord.ui.button(label="cancel", style=discord.ButtonStyle.secondary)
+    async def cancel(self, button, interaction):
+        if interaction.user.id != self.author.id:
+            return await interaction.response.send_message("not yours", ephemeral=True)
+        await interaction.response.edit_message(content="ok, nothing changed", embed=None, view=None)
+        self.stop()
+
+
 class ConfirmUndo(discord.ui.View):
     def __init__(self, cog, author):
         super().__init__(timeout=60)
@@ -135,9 +214,16 @@ class ServerSetup(commands.Cog):
         if not self._views_done:
             self._views_done = True
             for g in self.bot.guilds:
-                roles = (read_cfg(g.id).get("self_roles") or [])
+                gc = read_cfg(g.id)
+                roles = (gc.get("self_roles") or [])
                 if roles:
                     self.bot.add_view(SelfRoleView(roles))
+                kr = (gc.get("role_kit") or {}).get("roles") or {}
+                for gdef in sl.ROLE_KIT:
+                    if gdef.get("self"):
+                        _, rs = kit_panel_roles(gdef["key"], kr)
+                        if rs:
+                            self.bot.add_view(KitView(gdef["key"], rs, gdef.get("exclusive", False)))
         if not self.request_loop.is_running():
             self.request_loop.start()
 
@@ -367,19 +453,192 @@ class ServerSetup(commands.Cog):
         return (f"✅ restyled {renamed} channels/categories to **{sl.STYLES[style]['label']}** "
                 f"with **{sl.THEMES[theme]['label']}** icons")
 
+    def kit_status(self, guild, groups):
+        gc = read_cfg(guild.id)
+        kr = (gc.get("role_kit") or {}).get("roles") or {}
+        by_name = {r.name.lower(): r for r in guild.roles}
+        out = []
+        for gdef in sl.ROLE_KIT:
+            if gdef["key"] not in groups:
+                continue
+            rows = []
+            for r in gdef["roles"]:
+                key = f"{gdef['key']}:{r['slug']}"
+                role = None
+                if kr.get(key):
+                    role = guild.get_role(int(kr[key]))
+                if role is None and r.get("cfg") and str(gc.get(r["cfg"]) or "").isdigit():
+                    role = guild.get_role(int(gc.get(r["cfg"])))
+                if role is None:
+                    role = by_name.get(r["name"].lower())
+                rows.append((key, r, role))
+            out.append((gdef, rows))
+        return out
+
+    def kit_embed(self, status, channel_id):
+        have = sum(1 for _, rows in status for *_, role in rows if role)
+        total = sum(len(rows) for _, rows in status)
+        e = discord.Embed(title="role check", color=0xFF6AD5,
+                          description=f"**{have}/{total}** roles already exist · **{total - have}** will be made\n"
+                                      "existing roles are kept (uncolored ones get their color), nothing gets deleted")
+        for gdef, rows in status:
+            lines = [("✅ " if role else "➕ ") + r["name"] for _, r, role in rows]
+            e.add_field(name=f"{gdef['emoji']} {gdef['title']}", value="\n".join(lines)[:1024], inline=True)
+        e.set_footer(text=("panels go in " + (f"#{self.bot.get_channel(channel_id)}" if channel_id and self.bot.get_channel(channel_id) else "no channel - pass panel_channel"))
+                     + " · level/rebirth ranks get wired up automatically")
+        return e
+
+    def default_panel_channel(self, guild):
+        lay = read_cfg(guild.id).get("server_layout") or {}
+        for cid, info in (lay.get("channels") or {}).items():
+            if info.get("key") == "start:roles" and guild.get_channel(int(cid)):
+                return int(cid)
+        return None
+
+    async def apply_kit(self, guild, groups, channel_id=None, progress=None):
+        if guild.id in self.building:
+            return "something is already running for this server, wait for it to finish"
+        if not guild.me.guild_permissions.manage_roles:
+            return "❌ I need **Manage Roles** for this"
+        self.building.add(guild.id)
+        try:
+            return await self._apply_kit(guild, groups, channel_id, progress)
+        finally:
+            self.building.discard(guild.id)
+
+    async def _apply_kit(self, guild, groups, channel_id, progress):
+        status = {gdef["key"]: rows for gdef, rows in self.kit_status(guild, groups)}
+        kit = dict(read_cfg(guild.id).get("role_kit") or {})
+        kr = dict(kit.get("roles") or {})
+        made = list(kit.get("created") or [])
+        new = recolored = failed = 0
+        top = guild.me.top_role
+        for gkey in sl.ROLE_ORDER:
+            if gkey not in status:
+                continue
+            if progress:
+                await progress(f"roles: {gkey}…")
+            for key, r, role in reversed(status[gkey]):
+                if role is None:
+                    perms = discord.Permissions.none()
+                    for p in r.get("perms", []):
+                        if hasattr(perms, p):
+                            setattr(perms, p, True)
+                    try:
+                        role = await guild.create_role(name=r["name"], colour=discord.Colour(r.get("color", 0)),
+                                                       hoist=r.get("hoist", False), permissions=perms, reason="/setup roles")
+                    except discord.Forbidden:
+                        try:
+                            role = await guild.create_role(name=r["name"], colour=discord.Colour(r.get("color", 0)),
+                                                           hoist=r.get("hoist", False), reason="/setup roles")
+                        except discord.HTTPException:
+                            failed += 1
+                            continue
+                    made.append(str(role.id))
+                    new += 1
+                    await asyncio.sleep(0.3)
+                elif r.get("color") and role.colour.value == 0 and role < top and not role.managed:
+                    try:
+                        await role.edit(colour=discord.Colour(r["color"]), reason="/setup roles color")
+                        recolored += 1
+                    except discord.HTTPException:
+                        pass
+                kr[key] = str(role.id)
+
+        def save(g):
+            k = g.setdefault("role_kit", {})
+            k["roles"] = kr
+            k["created"] = sorted(set(made))
+            for gdef in sl.ROLE_KIT:
+                for r in gdef["roles"]:
+                    rid = kr.get(f"{gdef['key']}:{r['slug']}")
+                    if not rid:
+                        continue
+                    if r.get("cfg") and not g.get(r["cfg"]):
+                        g[r["cfg"]] = int(rid) if r["cfg"] == "manager_role" else rid
+                    if gdef.get("bind") and r.get("at"):
+                        g.setdefault(gdef["bind"], {}).setdefault(str(r["at"]), rid)
+        await update_cfg(guild.id, save)
+
+        posted = []
+        channel = guild.get_channel(channel_id) if channel_id else None
+        if channel is not None:
+            if progress:
+                await progress("posting role panels…")
+            posted = await self._post_kit_panels(guild, channel, groups, kr)
+        msg = f"✅ roles done - **{new}** made, **{recolored}** recolored, **{sum(len(v) for v in status.values()) - new - failed}** already there"
+        if failed:
+            msg += f"\n⚠️ {failed} couldn't be made"
+        if posted:
+            msg += f"\npanels in {channel.mention}: {', '.join(posted)}"
+        elif channel is None and any(g.get("self") and g["key"] in groups for g in sl.ROLE_KIT):
+            msg += "\nno panel channel - run it again with `panel_channel:` to post the pick-a-role buttons"
+        msg += "\ntip: drag my role above these in Server Settings → Roles so I can hand them out"
+        self.bot.casino.log_event(guild.name, f"/setup roles made {new} roles")
+        return msg
+
+    async def _post_kit_panels(self, guild, channel, groups, kr):
+        kit = read_cfg(guild.id).get("role_kit") or {}
+        panels = dict(kit.get("panels") or {})
+        accent = sl.THEMES.get((read_cfg(guild.id).get("server_layout") or {}).get("theme") or "emoji", sl.THEMES["emoji"])["accent"]
+        old_pings = None
+        if "pings" in groups:
+            try:
+                async for m in channel.history(limit=50):
+                    if m.author.id == guild.me.id and m.embeds and (m.embeds[0].title or "").endswith("pick your pings"):
+                        old_pings = m
+                        break
+            except discord.HTTPException:
+                pass
+        posted = []
+        for gdef in sl.ROLE_KIT:
+            if not gdef.get("self") or gdef["key"] not in groups:
+                continue
+            gdef, roles = kit_panel_roles(gdef["key"], kr)
+            if not roles:
+                continue
+            view = KitView(gdef["key"], roles, gdef.get("exclusive", False))
+            emb = kit_panel_embed(gdef, roles, accent)
+            msg = None
+            prev = panels.get(gdef["key"])
+            if prev and int(prev[0]) == channel.id:
+                try:
+                    msg = await channel.fetch_message(int(prev[1]))
+                except discord.HTTPException:
+                    msg = None
+            if msg is None and gdef["key"] == "pings" and old_pings is not None:
+                msg = old_pings
+            try:
+                if msg is not None:
+                    await msg.edit(embed=emb, view=view)
+                else:
+                    msg = await channel.send(embed=emb, view=view)
+                panels[gdef["key"]] = [str(channel.id), str(msg.id)]
+                self.bot.add_view(view)
+                posted.append(gdef["key"])
+            except discord.HTTPException as e:
+                print(f"[setup] role panel {gdef['key']} failed: {e}")
+
+        def save(g):
+            g.setdefault("role_kit", {})["panels"] = panels
+        await update_cfg(guild.id, save)
+        return posted
+
     def undo_counts(self, guild):
         layout = read_cfg(guild.id).get('server_layout') or {}
         chans = [c for c in (layout.get('channels') or {}) if guild.get_channel(int(c))]
         cats = [c for c in (layout.get('categories') or {}) if guild.get_channel(int(c))]
-        roles = [r for r in (layout.get('created_roles') or []) if guild.get_role(int(r))]
+        kit = (read_cfg(guild.id).get('role_kit') or {}).get('created') or []
+        roles = {r for r in list(layout.get('created_roles') or []) + list(kit) if guild.get_role(int(r))}
         return len(chans), len(cats), len(roles)
 
     async def undo(self, guild, progress=None):
         if guild.id in self.building:
             return "something is already running for this server, wait for it to finish"
         layout = read_cfg(guild.id).get('server_layout') or {}
-        if not layout.get('channels') and not layout.get('categories'):
-            return "nothing to undo - `/setup build` hasn't made anything here"
+        kit_made = (read_cfg(guild.id).get('role_kit') or {}).get('created') or []
+        if not layout.get('channels') and not layout.get('categories') and not kit_made:
+            return "nothing to undo - `/setup` hasn't made anything here"
         self.building.add(guild.id)
         gone_ch, gone_roles, failed = set(), set(), 0
         try:
@@ -395,7 +654,7 @@ class ServerSetup(commands.Cog):
                         await progress(f"deleted {len(gone_ch)}…")
                 except discord.HTTPException:
                     failed += 1
-            for rid in layout.get('created_roles') or []:
+            for rid in sorted(set(list(layout.get('created_roles') or []) + list(kit_made))):
                 role = guild.get_role(int(rid))
                 if role is None:
                     gone_roles.add(str(rid))
@@ -422,6 +681,9 @@ class ServerSetup(commands.Cog):
                 g['manager_role'] = None
             g['self_roles'] = [r for r in (g.get('self_roles') or []) if str(r.get('id')) not in gone_roles]
             g['server_layout'] = {}
+            for bk in ('level_roles', 'rebirth_roles'):
+                g[bk] = {k: v for k, v in (g.get(bk) or {}).items() if str(v) not in gone_roles}
+            g['role_kit'] = {}
             g['status_message_id'] = None
         await update_cfg(guild.id, clear)
         self.bot.casino.log_event(guild.name, f"/setup undo removed {len(gone_ch)} channels and {len(gone_roles)} roles")
@@ -465,18 +727,37 @@ class ServerSetup(commands.Cog):
     @setup_group.command(name='undo', description='delete every channel, category and role /setup build made')
     async def setup_undo(self, ctx):
         ch, cats, roles = self.undo_counts(ctx.guild)
-        if not (ch or cats):
-            return await ctx.respond("nothing to undo - `/setup build` hasn't made anything here", ephemeral=True)
-        await ctx.respond(f"⚠️ this deletes **{ch}** channels, **{cats}** categories and **{roles}** roles that `/setup build` made, "
+        if not (ch or cats or roles):
+            return await ctx.respond("nothing to undo - `/setup` hasn't made anything here", ephemeral=True)
+        await ctx.respond(f"⚠️ this deletes **{ch}** channels, **{cats}** categories and **{roles}** roles that `/setup` made, "
                           "**including every message in those channels**. channels and roles that were already here stay. "
                           "this can't be reversed.", view=ConfirmUndo(self, ctx.author), ephemeral=True)
+
+    async def _roles_prompt(self, ctx, groups_raw, channel, send):
+        raw = (groups_raw or "all").lower().replace(",", " ").split()
+        groups = sl.ROLE_KIT_KEYS if not raw or "all" in raw else [k for k in sl.ROLE_KIT_KEYS if k in raw]
+        if not groups:
+            return await send("groups: " + ", ".join(f"`{k}`" for k in sl.ROLE_KIT_KEYS) + " (or `all`)")
+        cid = channel.id if channel else self.default_panel_channel(ctx.guild)
+        await send("here's what I found:", embed=self.kit_embed(self.kit_status(ctx.guild, groups), cid),
+                   view=ConfirmRoles(self, ctx.author, groups, cid))
+
+    @setup_group.command(name='roles', description='check for missing roles, make them, and post pick-a-role panels')
+    async def setup_roles(self, ctx,
+                          groups: Option(str, "which sets, e.g. 'colors pings' - default all", required=False) = "all",
+                          panel_channel: Option(discord.TextChannel, "where the pick-a-role buttons go", required=False) = None):
+        await self._roles_prompt(ctx, groups, panel_channel, lambda *a, **k: ctx.respond(*a, ephemeral=True, **k))
 
     @commands.command(name="setup")
     @commands.has_permissions(administrator=True)
     async def setup_cmd(self, ctx, style: str = sl.DEFAULT_STYLE, icons: str = sl.DEFAULT_THEME, games: str = "grouped"):
+        if style == "roles":
+            ch = ctx.message.channel_mentions[0] if ctx.message.channel_mentions else None
+            grp = " ".join(w for w in ctx.message.content.split()[2:] if not w.startswith("<#"))
+            return await self._roles_prompt(ctx, grp, ch, ctx.send)
         if style == "undo":
             ch, cats, roles = self.undo_counts(ctx.guild)
-            if not (ch or cats):
+            if not (ch or cats or roles):
                 return await ctx.send("nothing to undo")
             return await ctx.send(f"⚠️ this deletes **{ch}** channels, **{cats}** categories and **{roles}** roles "
                                   "`/setup build` made, including all messages in them. can't be reversed.",

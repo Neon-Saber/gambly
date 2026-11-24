@@ -253,3 +253,82 @@ PING_ROLES = [
     {"name": "Casino Events", "emoji": "🎲"},
     {"name": "Server Updates", "emoji": "🛠️"},
 ]
+
+MOD_PERMS = ["kick_members", "ban_members", "moderate_members", "manage_messages", "manage_nicknames",
+             "mute_members", "move_members", "view_audit_log"]
+
+ROLE_KIT = [
+    {"key": "staff", "title": "Staff team", "emoji": "🛡️", "roles": [
+        {"slug": "admin", "name": "Admin", "color": 0xE74C3C, "hoist": True,
+         "perms": MOD_PERMS + ["manage_guild", "manage_channels", "manage_roles", "manage_webhooks", "manage_emojis"]},
+        {"slug": "mod", "name": "Moderator", "color": 0x3498DB, "hoist": True, "perms": MOD_PERMS},
+        {"slug": "trial", "name": "Trial Mod", "color": 0x85C1E9, "hoist": True, "perms": ["manage_messages", "moderate_members"]},
+        {"slug": "staff", "name": "Staff", "color": 0xFF6AD5, "hoist": True, "cfg": "staff_role_id",
+         "perms": ["manage_messages", "kick_members", "moderate_members", "mute_members"]},
+        {"slug": "manager", "name": "Casino Manager", "color": 0xF5C542, "cfg": "manager_role"},
+        {"slug": "host", "name": "Event Host", "color": 0x9B59B6, "perms": ["mention_everyone", "manage_events"]},
+    ]},
+    {"key": "special", "title": "Special", "emoji": "💎", "roles": [
+        {"slug": "vip", "name": "VIP", "color": 0xF1C40F, "hoist": True},
+        {"slug": "partner", "name": "Partner", "color": 0x1ABC9C},
+        {"slug": "creator", "name": "Content Creator", "color": 0xE91E63},
+        {"slug": "og", "name": "OG", "color": 0xA569BD},
+        {"slug": "bots", "name": "Bots", "color": 0x7289DA, "hoist": True},
+    ]},
+    {"key": "colors", "title": "Name colors", "emoji": "🎨", "self": True, "exclusive": True,
+     "blurb": "pick a color for your name - picking a new one swaps it", "roles": [
+        {"slug": "red", "name": "Red", "color": 0xFF4D4D, "emoji": "🔴"},
+        {"slug": "orange", "name": "Orange", "color": 0xFF9F43, "emoji": "🟠"},
+        {"slug": "yellow", "name": "Yellow", "color": 0xFFE066, "emoji": "🟡"},
+        {"slug": "green", "name": "Green", "color": 0x2ECC71, "emoji": "🟢"},
+        {"slug": "mint", "name": "Mint", "color": 0x7DFFCB, "emoji": "🩵"},
+        {"slug": "blue", "name": "Blue", "color": 0x4DA3FF, "emoji": "🔵"},
+        {"slug": "purple", "name": "Purple", "color": 0xA66CFF, "emoji": "🟣"},
+        {"slug": "pink", "name": "Pink", "color": 0xFF7AD9, "emoji": "🩷"},
+        {"slug": "white", "name": "White", "color": 0xFDFDFD, "emoji": "⚪"},
+        {"slug": "black", "name": "Black", "color": 0x111111, "emoji": "⚫"},
+    ]},
+    {"key": "rebirths", "title": "Rebirth ranks", "emoji": "♻️", "bind": "rebirth_roles", "roles": [
+        {"slug": "r1", "name": "Rebirth I", "color": 0xB2F2BB, "at": 1},
+        {"slug": "r2", "name": "Rebirth II", "color": 0x8CE99A, "at": 2},
+        {"slug": "r3", "name": "Rebirth III", "color": 0x63E6BE, "at": 3},
+        {"slug": "r4", "name": "Rebirth IV", "color": 0x3BC9DB, "at": 4},
+        {"slug": "r5", "name": "Rebirth V", "color": 0x4DABF7, "at": 5},
+        {"slug": "r6", "name": "Rebirth VI", "color": 0x9775FA, "at": 6},
+        {"slug": "r7", "name": "Rebirth VII", "color": 0xF783AC, "at": 7},
+    ]},
+    {"key": "levels", "title": "Level ranks", "emoji": "⭐", "bind": "level_roles", "roles": [
+        {"slug": "l5", "name": "Lv 5 · Rookie", "color": 0xCED4DA, "at": 5},
+        {"slug": "l10", "name": "Lv 10 · Regular", "color": 0xA9E34B, "at": 10},
+        {"slug": "l20", "name": "Lv 20 · Gambler", "color": 0x69DB7C, "at": 20},
+        {"slug": "l30", "name": "Lv 30 · High Roller", "color": 0x38D9A9, "at": 30},
+        {"slug": "l50", "name": "Lv 50 · Shark", "color": 0x339AF0, "at": 50},
+        {"slug": "l75", "name": "Lv 75 · Whale", "color": 0x845EF7, "at": 75},
+        {"slug": "l100", "name": "Lv 100 · Legend", "color": 0xFCC419, "at": 100},
+    ]},
+    {"key": "pings", "title": "Pings", "emoji": "🔔", "self": True,
+     "blurb": "pick what you want to get pinged for - tap again to remove", "roles": [
+        {"slug": "announce", "name": "Announcements", "color": 0xFF8787, "emoji": "📢"},
+        {"slug": "giveaways", "name": "Giveaways", "color": 0xFFD43B, "emoji": "🎉"},
+        {"slug": "events", "name": "Casino Events", "color": 0xB197FC, "emoji": "🎲"},
+        {"slug": "updates", "name": "Server Updates", "color": 0x74C0FC, "emoji": "🛠️"},
+        {"slug": "polls", "name": "Polls", "color": 0x63E6BE, "emoji": "📊"},
+        {"slug": "revive", "name": "Chat Revive", "color": 0x8CE99A, "emoji": "💬"},
+        {"slug": "partners", "name": "Partnerships", "color": 0xFFA94D, "emoji": "🤝"},
+        {"slug": "gamenight", "name": "Game Night", "color": 0xF783AC, "emoji": "🎮"},
+    ]},
+    {"key": "pronouns", "title": "Pronouns", "emoji": "🏷️", "self": True, "blurb": "optional - pick any that fit", "roles": [
+        {"slug": "he", "name": "he/him", "emoji": "💙"},
+        {"slug": "she", "name": "she/her", "emoji": "💗"},
+        {"slug": "they", "name": "they/them", "emoji": "💜"},
+        {"slug": "any", "name": "any pronouns", "emoji": "🤍"},
+        {"slug": "ask", "name": "ask my pronouns", "emoji": "💬"},
+    ]},
+    {"key": "platforms", "title": "Platforms", "emoji": "🎮", "self": True, "blurb": "what do you play on?", "roles": [
+        {"slug": "pc", "name": "PC", "emoji": "🖥️"},
+        {"slug": "console", "name": "Console", "emoji": "🎮"},
+        {"slug": "mobile", "name": "Mobile", "emoji": "📱"},
+    ]},
+]
+ROLE_KIT_KEYS = [g["key"] for g in ROLE_KIT]
+ROLE_ORDER = ["pronouns", "platforms", "pings", "levels", "rebirths", "special", "colors", "staff"]
