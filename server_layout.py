@@ -367,4 +367,46 @@ ROLE_KIT = [
     ]},
 ]
 ROLE_KIT_KEYS = [g["key"] for g in ROLE_KIT]
+
+STAFF_BASE = ["attach_files", "embed_links", "use_external_emojis", "use_external_stickers", "add_reactions",
+              "create_public_threads", "send_messages_in_threads", "read_message_history", "connect", "speak", "stream"]
+MEDIA = ["attach_files", "embed_links"]
+EMOTES = ["use_external_emojis", "use_external_stickers"]
+EXTRA_PERMS = {
+    "staff:house": ["administrator"],
+    "staff:coowner": ["priority_speaker", "deafen_members", "manage_nicknames"],
+    "staff:pitboss": ["priority_speaker", "deafen_members"],
+    "staff:floor": ["priority_speaker", "view_audit_log"],
+    "security:head": ["deafen_members", "manage_threads"],
+    "security:senior": ["manage_threads"],
+    "security:sec": ["manage_nicknames", "view_audit_log"],
+    "security:junior": ["mute_members"],
+    "crew:dealer": MEDIA + EMOTES,
+    "crew:host": ["priority_speaker", "move_members"] + MEDIA + EMOTES,
+    "crew:partners": ["mention_everyone", "create_public_threads"] + MEDIA + EMOTES,
+    "crew:media": ["create_public_threads", "manage_threads", "stream"] + MEDIA + EMOTES,
+    "crew:team": ["view_audit_log"] + MEDIA + EMOTES,
+    "special:vip": ["change_nickname", "stream", "create_public_threads"] + MEDIA + EMOTES,
+    "special:partner": MEDIA + EMOTES,
+    "special:creator": ["stream", "create_public_threads"] + MEDIA + EMOTES,
+    "special:og": MEDIA + EMOTES,
+    "special:bots": ["read_message_history", "add_reactions"] + MEDIA + EMOTES,
+    "levels:l5": ["use_external_emojis"],
+    "levels:l10": MEDIA,
+    "levels:l20": ["use_external_stickers", "stream"],
+    "levels:l30": ["change_nickname", "create_public_threads"],
+    "rebirths:r1": EMOTES,
+    "rebirths:r3": MEDIA,
+    "rebirths:r5": ["stream", "change_nickname"],
+}
+
+
+def role_perms(gkey, r):
+    if r.get("divider"):
+        return []
+    out = list(r.get("perms", []))
+    if gkey in ("staff", "security"):
+        out += STAFF_BASE
+    out += EXTRA_PERMS.get(f"{gkey}:{r.get('slug')}", [])
+    return list(dict.fromkeys(out))
 ROLE_ORDER = ["staff", "security", "crew", "special", "colors", "rebirths", "levels", "pings", "pronouns", "platforms"]

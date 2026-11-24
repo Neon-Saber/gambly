@@ -545,14 +545,14 @@ class ServerSetup(commands.Cog):
         kr = dict(kit.get("roles") or {})
         made = list(kit.get("created") or [])
         ours = set(made) | set((read_cfg(guild.id).get("server_layout") or {}).get("created_roles") or [])
-        new = recolored = failed = renamed = 0
+        new = recolored = failed = renamed = permed = 0
         top = guild.me.top_role
         for gkey in sl.ROLE_ORDER:
             if gkey not in status:
                 continue
             if progress:
                 await progress(f"roles: {gkey}…")
-            for key, r, role in reversed(status[gkey]):
+            for key, r, role in status[gkey]:
                 if role is not None and role.name != r["name"] and not r.get("divider") and str(role.id) in ours and role < top and not role.managed:
                     try:
                         await role.edit(name=r["name"], reason="/setup roles rename")
@@ -567,11 +567,20 @@ class ServerSetup(commands.Cog):
                     except discord.HTTPException:
                         failed += 1
                         continue
+                perms = discord.Permissions.none()
+                for p in sl.role_perms(gkey, r):
+                    if hasattr(perms, p):
+                        setattr(perms, p, True)
+                if role is not None and perms.value and role < top and not role.managed \
+                        and (role.permissions.value | perms.value) != role.permissions.value:
+                    try:
+                        await role.edit(permissions=discord.Permissions(role.permissions.value | perms.value),
+                                        reason="/setup roles perms")
+                        permed += 1
+                        await asyncio.sleep(0.3)
+                    except discord.HTTPException:
+                        pass
                 if role is None:
-                    perms = discord.Permissions.none()
-                    for p in r.get("perms", []):
-                        if hasattr(perms, p):
-                            setattr(perms, p, True)
                     try:
                         role = await guild.create_role(name=r["name"], colour=discord.Colour(r.get("color", 0)),
                                                        hoist=r.get("hoist", False), permissions=perms, reason="/setup roles")
@@ -597,7 +606,7 @@ class ServerSetup(commands.Cog):
         kr = {k: v for k, v in kr.items() if k in valid}
         if progress:
             await progress("putting roles in order…")
-        moved, stuck = await self.fix_role_order(guild, kr)
+        moved, stuck, flat = await self.fix_role_order(guild, kr)
         house = guild.get_role(int(kr["staff:house"])) if kr.get("staff:house") else None
         own = guild.get_member(guild.owner_id) if hasattr(guild, "get_member") else None
         if house and own and house not in own.roles and house < top:
@@ -628,7 +637,11 @@ class ServerSetup(commands.Cog):
                 await progress("posting role panels…")
             posted = await self._post_kit_panels(guild, channel, groups, kr)
         msg = (f"✅ roles done - **{new}** made, **{renamed}** renamed, **{recolored}** recolored, "
-               f"**{sum(len(v) for v in status.values()) - new - failed}** already there, **{moved}** moved into place")
+               f"**{sum(len(v) for v in status.values()) - new - failed}** already there, **{permed}** got permissions, "
+               f"**{moved}** moved into place")
+        if flat:
+            msg += ("\n⚠️ Discord has all your roles stacked on one spot, so I can't sort them yet. open Server Settings → Roles, "
+                    "drag any role down one and back up (that makes Discord number them all), then run `/setup roles` again")
         if stuck:
             msg += f"\n⚠️ {stuck} are above my role so I couldn't move them - drag my role to the top in Server Settings → Roles and run this again"
         if failed:
@@ -656,7 +669,10 @@ class ServerSetup(commands.Cog):
         movable = [r for r in roles if r < top and not r.managed]
         stuck = len(roles) - len(movable)
         if not movable:
-            return 0, stuck
+            return 0, stuck, False
+        below = [r for r in guild.roles if r < top and not r.is_default()]
+        if top.position - 1 < len(below) or len({r.position for r in below}) < len(below):
+            return 0, stuck, True
         others = [r for r in guild.roles if r < top and not r.is_default() and r not in movable]
         ordered = movable + sorted(others, key=lambda r: r.position, reverse=True)
         positions = {}
@@ -672,8 +688,8 @@ class ServerSetup(commands.Cog):
                 await guild.edit_role_positions(positions=positions, reason="/setup roles order")
             except discord.HTTPException as e:
                 print(f"[setup] role reorder failed: {e}")
-                return 0, stuck
-        return changed, stuck
+                return 0, stuck, False
+        return changed, stuck, False
 
     async def _post_kit_panels(self, guild, channel, groups, kr):
         kit = read_cfg(guild.id).get("role_kit") or {}
