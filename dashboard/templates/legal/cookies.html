@@ -1,0 +1,18 @@
+{% extends "legal/_doc.html" %}
+{% block doc_title %}Cookie Policy{% endblock %}
+{% block doc %}
+<p>this dashboard sets one cookie, and only after you sign in. there are no analytics, ads or tracking cookies, so there's no cookie banner.</p>
+<table>
+  <thead><tr><th>cookie</th><th>what it's for</th><th>how long</th></tr></thead>
+  <tbody>
+    <tr><td><code>session</code></td><td>keeps you logged in. it only holds a random ID; your actual session (Discord profile, server list, sign-in token) is stored on the dashboard server. it's marked HttpOnly (page scripts can't read it), SameSite=Lax, and Secure on the live site</td><td>7 days, or until you log out</td></tr>
+  </tbody>
+</table>
+<h2>Things that aren't cookies</h2>
+<ul>
+  <li>the fonts load from Google Fonts. Google doesn't set cookies for this, but your browser does send it your IP address. see the <a href="/privacy">Privacy Policy</a>.</li>
+  <li>the dashboard doesn't use local storage or other tracking in your browser.</li>
+</ul>
+<h2>Turning it off</h2>
+<p>you can block cookies in your browser, but then you can't stay signed in. the public pages (help and these policies) work without it.</p>
+{% endblock %}

@@ -1,7 +1,11 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>sign-in didn't work</title><link rel="stylesheet" href="/static/css/style.css?v=r5"></head>
-<body><div class="solo"><div class="solo-card">
-  <h1 class="page-title">sign-in didn't work</h1>
-  <p class="page-sub">Discord didn't finish the sign-in ({{ reason }}). usually the redirect URI in the Discord app doesn't match DISCORD_REDIRECT_URI exactly, or the link expired.</p>
-  <a class="b b-go" href="/login">try again</a>
-</div></div></body></html>
+{% extends "base.html" %}
+{% from "_macros.html" import chip %}
+{% block title %}sign-in didn't go through · {{ bot_name }}{% endblock %}
+{% block content %}
+<section class="err-page"><div>
+  {{ chip('#c4453a') }}
+  <h1 class="h1" style="margin-top:14px">sign-in didn't go through</h1>
+  <p>Discord didn't finish the sign-in ({{ reason }}). usually the redirect URI in the Discord app doesn't match DISCORD_REDIRECT_URI exactly, or the login link sat open too long.</p>
+  <a class="btn gold" href="/login">try again</a>
+</div></section>
+{% endblock %}

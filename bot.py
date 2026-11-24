@@ -1047,69 +1047,7 @@ for _ext in ("cogs.moderation", "cogs.tickets", "cogs.reports", "cogs.logging_ev
 
 
 # ================= HELP =================
-HELP_TEXT = (
-    "**money**\n"
-    "`balance [user]` · `daily` (streak bonus, up to +45%) · `work` · `crime` (riskier, pays more) · `beg` · "
-    "`stats [user]` · `profile [user]` · `achievements` · `hide` (hides your bank from !bal)\n\n"
-    "**bank & loans**\n"
-    "`deposit <amt>` / `withdraw <amt>` - bank chips can't be robbed and earn a bit of interest\n"
-    "`loan <amt>` (20% interest, 24h) · `repay <amt>` · `invest <amt> <days>` - if a loan goes overdue the house "
-    "takes what you have and the rest grows 5% a day\n\n"
-    "**free chips**\n"
-    "`/claim weekly` · `/claim monthly` · `/claim spin` (daily wheel) · `quests` (3 a day) · `trivia` · "
-    "`/gather fish|mine|hunt` (10 min cooldown, loot sells instantly) · `/gather collection`\n\n"
-    "**your data**\n"
-    "`deletemydata` wipes your account and warnings for good, no staff needed\n\n"
-    "**classic games**\n"
-    "`coinflip <amt> <heads/tails>` · `slots <amt>` · `jackpot` · `dice <amt> <1-6>` · `roulette <amt> <red/black/green/0-36>` · "
-    "`allin <red/black>` · `blackjack <amt>` · `war <amt>` · `hilo <amt>` · `crash <amt> <x>` · `mines <amt> [mines]` · "
-    "`plinko <amt>` · `horserace <amt> <horse>` · `scratch` · `wheel <amt>` · `keno <amt> <numbers>` · "
-    "`baccarat <amt> <player/banker/tie>` · `rps <amt> <pick>` · `ladder <amt> <1-6>`\n\n"
-    "**/play games** (or just `!<game>`)\n"
-    "cups · dragontiger · sicbo · sevens · revolver · chests · diceduel · cardguess · target · craps · threecard · "
-    "bingo · towers · balloon · videopoker · rocket · penalty · doors - `/games` shows what each pays\n"
-    "amounts take `250`, `15k`, `1.5m` or `all`. some games only work in their own channel, the bot tells you where\n\n"
-    "**multiplayer** (main server only)\n"
-    "`duel <user> <amt>` · `/play tictactoe` · `/play connect4` · `/play heist` · `lottery` · `buyticket <n>`\n\n"
-    "**shop**\n"
-    "`shop` · `buy <item>` · `use <item>` · `pawn <item>` (half back) · `inventory` · `craft vault`\n\n"
-    "**business & upgrades**\n"
-    "`business` · `buybusiness <tier>` · `collect` - income builds up by the hour\n"
-    "`upgrades` · `buyupgrade <name>` - permanent boosts\n\n"
-    "**rebirth**\n"
-    "`rebirth` - once you're rich enough, reset for a permanent earnings + luck boost (7 max). badges stay\n\n"
-    "**social** (main server only)\n"
-    "`give <user> <amt>` · `rob <user>` · `bounty <user> <amt>` · `bounties` · `leaderboard` · `debtors`\n\n"
-    "**levels**\n"
-    "`rank [user]` · `levels` - you level up by chatting. rank roles unlock automatically\n\n"
-    "**tickets & reports**\n"
-    "open a ticket from the ticket panel · `close-ticket` inside it · `report <member> <reason>` or right click a "
-    "message → Apps → Report Message\n\n"
-    "**roles**\n"
-    "grab colors, pings, pronouns and platforms from the buttons in the roles channel\n\n"
-    "**security · trial+** (`/mod`)\n"
-    "`warn` · `warnings` · `mute` · `unmute` · `purge` · `ticket-add` · `ranks`\n"
-    "mutes max 1h and purges max 25 until security\n\n"
-    "**security · junior+**\n"
-    "`slowmode`\n\n"
-    "**security · security+**\n"
-    "`kick` · `lock` · `unlock` - mutes up to 1d (senior 7d, head 28d)\n\n"
-    "**security · senior+**\n"
-    "`clearwarnings`\n\n"
-    "**security · head+**\n"
-    "`ban` · `unban`\n\n"
-    "**casino staff** (`/casino` - dealers + floor managers)\n"
-    "`addchips` · `removechips` · `setbalance` · `forgive` · `ban` / `unban` (from games) · `reset` · `giveaway` (hosts too)\n\n"
-    "**admin** (`/admin` - floor managers+)\n"
-    "`role give/take` (pit boss+ for staff ranks) · `ticket-panel` · `announce-channel` · `diag` · `test-welcome` · "
-    "`test-levelup` · `prefix` (pit boss+)\n\n"
-    "**owner** (`/owner` + `/setup` - the server owner only)\n"
-    "`/setup build` · `/setup roles` · `/setup restyle` · `/setup preview` · `/setup undo` · `/owner managers` · "
-    "`/owner testmode` · `/owner wipe-economy`\n\n"
-    "**rules for staff**\n"
-    "you can't act on anyone ranked the same as you or higher. 😴 On Break turns your staff commands off till you take it off. "
-    "durations take `10m`, `2h`, `3d`, `1w` or combos like `1h30m`"
-)
+from help_data import HELP_TEXT
 
 
 def chunk_help_text(text, limit=4000):
@@ -1743,6 +1681,10 @@ async def do_deletemydata(ctx):
             warns[gid][uid] = []
             save_warnings(warns)
             removed.append("your moderation warning history")
+        lv = store.load(Path(__file__).parent / "levels.json")
+        if lv.get(gid, {}).pop(uid, None) is not None:
+            store.save(Path(__file__).parent / "levels.json", lv)
+            removed.append("your level and xp")
 
     if removed:
         where = "this server" if is_real_guild(space) else "your personal ledger"

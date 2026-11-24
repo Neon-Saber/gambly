@@ -1,0 +1,19 @@
+{% extends "legal/_doc.html" %}
+{% block doc_title %}Policies{% endblock %}
+{% block doc %}
+<p>{{ bot_name }} is a Discord bot and this is its dashboard. they're run by {{ who }}. here's everything that covers how you can use them and what happens with your data.</p>
+<table>
+  <thead><tr><th>page</th><th>what it covers</th></tr></thead>
+  <tbody>
+  {% for slug, label, blurb in legal_pages %}<tr><td><a href="/{{ slug }}">{{ label }}</a></td><td>{{ blurb }}</td></tr>{% endfor %}
+  </tbody>
+</table>
+<h2>The short version</h2>
+<ul>
+  <li>chips are play money. you can't buy them and you can't cash them out.</li>
+  <li>nothing is for sale, so there are no payments and no refunds to give.</li>
+  <li>we keep your Discord ID, name and game stats so the bot works. not your messages.</li>
+  <li>you can download or delete your data from <a href="{{ url_for('app_routes.account') }}">your account</a>, or with <code>/deletemydata</code> in Discord.</li>
+  <li>the only cookie keeps you logged in.</li>
+</ul>
+{% endblock %}

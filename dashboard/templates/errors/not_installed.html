@@ -1,7 +1,11 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>the bot isn't in there yet</title><link rel="stylesheet" href="/static/css/style.css?v=r5"></head>
-<body><div class="solo"><div class="solo-card">
-  <h1 class="page-title">the bot isn't in there yet</h1>
-  <p class="page-sub">add it to the server first, then come back here to set it up.</p>
-  <a class="b b-go" href="{{ invite_url }}" target="_blank" rel="noopener">add to server</a>
-</div></div></body></html>
+{% extends "base.html" %}
+{% from "_macros.html" import chip %}
+{% block title %}{{ bot_name }} isn't at this table · {{ bot_name }}{% endblock %}
+{% block content %}
+<section class="err-page"><div>
+  {{ chip('#d6ad4c') }}
+  <h1 class="h1" style="margin-top:14px">{{ bot_name }} isn't at this table</h1>
+  <p>the bot hasn't been added to that server, so there's nothing to set up yet.</p>
+  <a class="btn gold" href="{{ invite_url }}" target="_blank" rel="noopener">add it to the server</a> <a class="btn quiet" href="/dashboard">back</a>
+</div></section>
+{% endblock %}

@@ -1,24 +1,28 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ bot_name }} dashboard</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='r5') }}">
-</head>
-<body>
-<div class="solo">
-  <div class="solo-card">
-    <div class="brand">{% include "_mark.html" %}<span class="brand-name">{{ bot_name }}</span></div>
-    <h1 class="page-title">run your casino from here</h1>
-    <p class="page-sub">balances, games, staff, roles and the whole server layout. sign in with the Discord account that manages your server.</p>
+{% extends "base.html" %}
+{% from "_macros.html" import chip, icon %}
+{% block title %}{{ bot_name }} · run the house{% endblock %}
+{% block content %}
+<section class="landing">
+  <div>
+    <p class="eyebrow">dashboard for the {{ bot_name }} bot</p>
+    <h1 class="h1">run the house<br>from one place.</h1>
+    <p class="lede">balances, games, staff ranks, roles and the whole server layout. sign in with the Discord account that manages your server and pick a table.</p>
     <a class="discord-btn" href="{{ url_for('auth.login') }}">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.078.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.6 12.6 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.045-.32 13.58.099 18.058a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.061 0a.073.073 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127c-.598.35-1.220.645-1.873.892a.076.076 0 0 0-.04.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.029 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.056c.5-5.177-.838-9.674-3.548-13.66a.06.06 0 0 0-.031-.028ZM8.02 15.331c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.096 2.157 2.42 0 1.332-.955 2.418-2.157 2.418Zm7.974 0c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.096 2.157 2.42 0 1.332-.946 2.418-2.157 2.418Z"/></svg>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.078.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.6 12.6 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.74 19.74 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.045-.32 13.58.099 18.058a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.061 0a.073.073 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127c-.598.35-1.22.645-1.873.892a.076.076 0 0 0-.04.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.029 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.056c.5-5.177-.838-9.674-3.548-13.66a.06.06 0 0 0-.031-.028ZM8.02 15.331c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.096 2.157 2.42 0 1.332-.955 2.418-2.157 2.418Zm7.974 0c-1.183 0-2.157-1.086-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.211 0 2.176 1.096 2.157 2.42 0 1.332-.946 2.418-2.157 2.418Z"/></svg>
       Sign in with Discord
     </a>
-    <p class="fine">we only see your username and the servers you're in. nothing gets posted as you.
-      <a href="{{ url_for('app_routes.tos') }}">terms</a> · <a href="{{ url_for('app_routes.privacy') }}">privacy</a></p>
+    <ul class="facts">
+      <li>{{ icon('lock') }}<span>we only ask Discord for your username and the servers you're in. nothing gets posted as you.</span></li>
+      <li>{{ icon('coins') }}<span>chips are play money. nothing here costs anything and nothing can be cashed out.</span></li>
+      <li>{{ icon('help') }}<span>just looking for commands? <a href="{{ url_for('app_routes.help_center') }}">the help pages</a> don't need a login.</span></li>
+    </ul>
   </div>
-</div>
-</body>
-</html>
+  <div class="landing-art" aria-hidden="true">
+    <span style="left:6%;top:14%;transform:rotate(-12deg)">{{ chip('#c4453a') }}</span>
+    <span style="left:38%;top:0;transform:rotate(8deg)">{{ chip('#17432e') }}</span>
+    <span style="left:62%;top:30%;transform:rotate(22deg)">{{ chip('#d6ad4c') }}</span>
+    <span style="left:22%;top:50%;transform:rotate(-4deg)">{{ chip('#1f1a14') }}</span>
+    <span style="left:52%;top:62%;transform:rotate(-18deg)">{{ chip('#4c86c2') }}</span>
+  </div>
+</section>
+{% endblock %}

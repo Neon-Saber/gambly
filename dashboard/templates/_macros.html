@@ -1,0 +1,21 @@
+{% macro icon(name, cls="ic") -%}
+<svg class="{{ cls }}" aria-hidden="true"><use href="#i-{{ name }}"/></svg>
+{%- endmacro %}
+
+{% macro chip(color="#c4453a", cls="chip-svg", label=None) -%}
+<svg class="{{ cls }}" viewBox="0 0 64 64" {% if label %}role="img" aria-label="{{ label }}"{% else %}aria-hidden="true"{% endif %}>
+  <circle cx="32" cy="32" r="30" fill="{{ color }}"/>
+  <g fill="#f4ecd8">{% for a in range(0, 360, 45) %}<rect x="28.5" y="2" width="7" height="11" rx="1.5" transform="rotate({{ a }} 32 32)"/>{% endfor %}</g>
+  <circle cx="32" cy="32" r="18" fill="#f4ecd8"/>
+  <circle cx="32" cy="32" r="14" fill="none" stroke="{{ color }}" stroke-width="2" stroke-dasharray="3 3"/>
+  <circle cx="32" cy="32" r="30" fill="none" stroke="rgba(0,0,0,.25)" stroke-width="1"/>
+</svg>
+{%- endmacro %}
+
+{% macro ph(text) -%}
+<span class="todo">[{{ text }}]</span>
+{%- endmacro %}
+
+{% macro avatar(name, url, cls="srv-ic") -%}
+<span class="{{ cls }}">{% if url %}<img src="{{ url }}" alt="">{% else %}{{ (name or "?")[:1] }}{% endif %}</span>
+{%- endmacro %}

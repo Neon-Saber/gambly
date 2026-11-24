@@ -1,7 +1,11 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>almost set up</title><link rel="stylesheet" href="/static/css/style.css?v=r5"></head>
-<body><div class="solo"><div class="solo-card">
-  <h1 class="page-title">almost set up</h1>
-  <p class="page-sub">DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET aren't in .env yet. add them (the README shows where to find them) and restart.</p>
+{% extends "base.html" %}
+{% from "_macros.html" import chip %}
+{% block title %}almost ready · {{ bot_name }}{% endblock %}
+{% block content %}
+<section class="err-page"><div>
+  {{ chip('#d6ad4c') }}
+  <h1 class="h1" style="margin-top:14px">almost ready</h1>
+  <p>DISCORD_CLIENT_ID and DISCORD_CLIENT_SECRET aren't set on the dashboard host yet. add them to the environment (the README shows where they come from) and restart.</p>
   
-</div></div></body></html>
+</div></section>
+{% endblock %}

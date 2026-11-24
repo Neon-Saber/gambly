@@ -1,7 +1,11 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>not yours to manage</title><link rel="stylesheet" href="/static/css/style.css?v=r5"></head>
-<body><div class="solo"><div class="solo-card">
-  <h1 class="page-title">not yours to manage</h1>
-  <p class="page-sub">Discord says you don't have Manage Server there. if that's wrong, check your roles in that server.</p>
-  <a class="b b-go" href="/dashboard">back to your servers</a>
-</div></div></body></html>
+{% extends "base.html" %}
+{% from "_macros.html" import chip %}
+{% block title %}not your table · {{ bot_name }}{% endblock %}
+{% block content %}
+<section class="err-page"><div>
+  {{ chip('#c4453a') }}
+  <h1 class="h1" style="margin-top:14px">not your table</h1>
+  <p>Discord says you don't have Manage Server there. if that's wrong, check your roles in that server, then sign in again so we get the fresh list.</p>
+  <a class="btn gold" href="/dashboard">back to your servers</a>
+</div></section>
+{% endblock %}

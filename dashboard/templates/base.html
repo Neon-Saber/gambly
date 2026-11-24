@@ -1,0 +1,58 @@
+{% from "_macros.html" import icon, chip %}<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ bot_name }}{% endblock %}</title>
+<meta name="description" content="{{ bot_name }} dashboard: manage the casino, staff and server for your Discord community.">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=asset_v) }}">
+</head>
+<body{% block body_attrs %}{% endblock %}>
+<a class="skip" href="#main">skip to content</a>
+{% include "_icons.html" %}
+<header class="top">
+  <a class="brand" href="{{ url_for('app_routes.dashboard_home') if me else url_for('app_routes.landing') }}">{{ chip('#c4453a', 'chip-svg') }}<span class="brand-name">{{ bot_name }}</span></a>
+  <nav class="top-nav" aria-label="site">
+    {% if me %}<a href="{{ url_for('app_routes.dashboard_home') }}" {% if nav == 'servers' %}aria-current="page"{% endif %}>Servers</a>{% endif %}
+    <a href="{{ url_for('app_routes.help_center') }}" {% if nav == 'help' %}aria-current="page"{% endif %}>Help</a>
+    {% if me_admin %}<a href="{{ url_for('app_routes.bot_admin_home') }}" {% if nav == 'admin' %}aria-current="page"{% endif %}>Bot admin</a>{% endif %}
+  </nav>
+  <div class="top-right">
+    {% block top_extra %}{% endblock %}
+    {% if me %}
+      <a class="who-btn" href="{{ url_for('app_routes.account') }}" {% if nav == 'account' %}aria-current="page"{% endif %}>
+        {% if me.avatar_url %}<img src="{{ me.avatar_url }}" alt="">{% else %}<span class="av-i">{{ (me.global_name or me.username)[:1] }}</span>{% endif %}
+        <span>{{ me.global_name or me.username }}</span>
+      </a>
+    {% else %}
+      <a class="btn gold sm" href="{{ url_for('auth.login') }}">Sign in</a>
+    {% endif %}
+  </div>
+</header>
+{% block layout %}<main id="main" tabindex="-1">{% block content %}{% endblock %}</main>{% endblock %}
+<footer class="site-foot">
+  <div class="foot-in">
+    <div>
+      <a class="brand" href="{{ url_for('app_routes.landing') }}">{{ chip('#17432e', 'chip-svg') }}<span class="brand-name" style="font-size:20px">{{ bot_name }}</span></a>
+      <p class="foot-blurb" style="margin-top:12px">a casino game bot for one Discord server. chips are play money with <b>no real-world value</b>. nothing here can be bought or cashed out.</p>
+    </div>
+    <div><h4>use it</h4><ul>
+      {% if me %}<li><a href="{{ url_for('app_routes.dashboard_home') }}">your servers</a></li><li><a href="{{ url_for('app_routes.account') }}">your account</a></li>{% else %}<li><a href="{{ url_for('auth.login') }}">sign in with Discord</a></li>{% endif %}
+      <li><a href="{{ url_for('app_routes.help_center') }}">help &amp; commands</a></li>
+      <li><a href="{{ url_for('app_routes.help_center') }}#faq">faq</a></li>
+    </ul></div>
+    <div><h4>legal</h4><ul>
+      {% for slug, label, _ in legal_pages %}<li><a href="/{{ slug }}">{{ label }}</a></li>{% endfor %}
+    </ul></div>
+    <div><h4>contact</h4><ul>
+      <li>{% if contact %}<a href="mailto:{{ contact }}">{{ contact }}</a>{% else %}<span class="hint">ask staff in the server, or open a ticket</span>{% endif %}</li>
+      <li><a href="{{ url_for('app_routes.legal_index') }}">all policies</a></li>
+      {% if me %}<li><a href="{{ url_for('auth.logout') }}">log out</a></li>{% endif %}
+    </ul></div>
+  </div>
+</footer>
+<div id="toasts" role="status" aria-live="polite"></div>
+<script src="{{ url_for('static', filename='js/api.js', v=asset_v) }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

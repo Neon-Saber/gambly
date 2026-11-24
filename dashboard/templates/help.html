@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, chip %}
+{% set nav = 'help' %}
+{% block title %}help &amp; commands · {{ bot_name }}{% endblock %}
+{% block content %}
+<div class="wrap">
+  <p class="eyebrow">help</p>
+  <h1 class="h1">every command, sorted by who can use it</h1>
+  <p class="lede">every command works as <code>/</code> and as <code>!</code>. newer games live under <code>/play</code>. amounts take <code>250</code>, <code>15k</code>, <code>1.5m</code> or <code>all</code>.</p>
+
+  <div class="filters" role="search">
+    <label class="sr" for="cmd-find">search commands</label>
+    <input type="search" id="cmd-find" placeholder="search commands, like rob or towers" autocomplete="off" style="max-width:340px">
+    <div class="pill-set" role="group" aria-label="who it's for">
+      <button type="button" data-who="all" aria-pressed="true">everything</button>
+      <button type="button" data-who="players" aria-pressed="false">players</button>
+      <button type="button" data-who="staff" aria-pressed="false">staff</button>
+    </div>
+    <span class="count" id="cmd-count"></span>
+  </div>
+
+  <div id="cmds">
+    {% for g in sections %}
+    <section class="cmd-group" data-group="{{ g.key }}" data-who="{{ 'staff' if g.key in ['security', 'staff', 'owner'] else 'players' }}" aria-labelledby="g-{{ g.key }}">
+      <div class="cmd-group-h"><h2 id="g-{{ g.key }}">{{ g.title }}</h2><span class="hint">{{ g.who }}</span></div>
+      {% for it in g['items'] %}
+      <div class="cmd-item" data-text="{{ (it.title ~ ' ' ~ it.text ~ ' ' ~ it.cmds|join(' '))|lower }}">
+        <h3>{{ it.title }}{% if it.note %}<small>{{ it.note }}</small>{% endif %}</h3>
+        <div>
+          {% if it.cmds %}<div class="cmd-chips">{% for c in it.cmds %}<code>{{ c }}</code>{% endfor %}</div>{% endif %}
+          <p>{{ it.text }}</p>
+        </div>
+      </div>
+      {% endfor %}
+    </section>
+    {% endfor %}
+  </div>
+  <div class="state" id="cmd-none" hidden>{{ chip('#17432e') }}<b>no command matches that</b>try a shorter word, or check the FAQ below</div>
+
+  <div class="cols" style="margin-top:20px">
+    <section class="faq" id="faq" aria-labelledby="faq-h">
+      <h2 class="sec-title" id="faq-h" style="font:28px var(--display);color:var(--gold-hi);margin-bottom:8px">questions people ask</h2>
+      {% for q, a in faq %}
+      <details><summary>{{ q }}</summary><p>{{ a }}</p></details>
+      {% endfor %}
+    </section>
+    <aside class="slip">
+      <span class="pip" aria-hidden="true">♣</span>
+      <h2>still stuck?</h2>
+      <p class="hint">open a ticket from the ticket panel in the server and staff will get back to you. for anything about your data or these policies:</p>
+      <p>{{ reach }}</p>
+      <p class="hint" style="margin-bottom:0">want to play outside the server? the <b>personal app</b> works in DMs and other servers. a server admin can grab the install link from the dashboard.</p>
+    </aside>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(function () {
+  const find = document.getElementById('cmd-find');
+  const items = Array.from(document.querySelectorAll('.cmd-item'));
+  const groups = Array.from(document.querySelectorAll('.cmd-group'));
+  let who = 'all';
+  function apply() {
+    const q = find.value.trim().toLowerCase();
+    let n = 0;
+    groups.forEach((g) => {
+      const groupOk = who === 'all' || g.dataset.who === who;
+      let any = false;
+      g.querySelectorAll('.cmd-item').forEach((it) => {
+        const hit = groupOk && (!q || it.dataset.text.includes(q));
+        it.hidden = !hit;
+        if (hit) { any = true; n++; }
+      });
+      g.hidden = !any;
+    });
+    document.getElementById('cmd-count').textContent = n + ' topics';
+    document.getElementById('cmd-none').hidden = n > 0;
+  }
+  find.addEventListener('input', apply);
+  document.querySelectorAll('[data-who]').forEach((b) => b.tagName === 'BUTTON' && b.addEventListener('click', () => {
+    who = b.dataset.who;
+    document.querySelectorAll('button[data-who]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    apply();
+  }));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && !/INPUT|TEXTAREA/.test(document.activeElement.tagName)) { e.preventDefault(); find.focus(); }
+  });
+  const q = new URLSearchParams(location.search).get('q');
+  if (q) find.value = q;
+  apply();
+})();
+</script>
+{% endblock %}

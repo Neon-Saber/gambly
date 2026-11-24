@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% from "_macros.html" import icon, chip %}
+{% set nav = 'account' %}
+{% block title %}your account · {{ bot_name }}{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div class="profile">
+    {% if me.avatar_url %}<img src="{{ me.avatar_url }}" alt="">{% else %}<span class="av-i" style="font-size:30px">{{ (me.global_name or me.username)[:1] }}</span>{% endif %}
+    <div>
+      <p class="eyebrow" style="margin-bottom:4px">your account</p>
+      <h1 class="h1" style="margin-bottom:2px">{{ me.global_name or me.username }}</h1>
+      <span class="sub">@{{ me.username }} · {{ me.id }}</span>
+    </div>
+  </div>
+
+  <div class="tiles" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="tile"><div class="n">{{ guild_count }}</div><div class="l">servers you're in</div></div>
+    <div class="tile"><div class="n">{{ manage_count }}</div><div class="l">you can manage</div></div>
+    <div class="tile {% if rows %}good{% endif %}"><div class="n">{{ rows|length }}</div><div class="l">places you've played</div></div>
+  </div>
+
+  <div class="cols">
+    <div>
+      <h2 class="sec-title">your chips everywhere</h2>
+      <p class="sec-sub">every server and ledger that has data tied to your Discord ID.</p>
+      {% if rows %}
+      <div class="ledger-wrap"><table class="ledger">
+        <thead><tr><th>where</th><th class="r">wallet</th><th class="r">bank</th><th class="r">level</th><th class="r">rebirths</th><th class="r">warnings</th></tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr><td class="who"><b>{{ r.server }}</b>{% if r.loan %}<small>owes {{ "{:,}".format(r.loan) }}</small>{% endif %}</td>
+            <td class="r">{{ "{:,}".format(r.bal) if r.bal is not none else "·" }}</td>
+            <td class="r">{{ "{:,}".format(r.bank) if r.bank is not none else "·" }}</td>
+            <td class="r">{{ r.level if r.level is not none else "·" }}</td>
+            <td class="r">{{ r.rebirths if r.rebirths is not none else "·" }}</td>
+            <td class="r">{{ r.warnings }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      {% else %}
+      <div class="box state">{{ chip('#17432e') }}<b>nothing stored for you</b>play a game in the server or the personal app and it shows up here.</div>
+      {% endif %}
+    </div>
+
+    <div>
+      <section class="slip">
+        <span class="pip" aria-hidden="true">♦</span>
+        <h2>your data</h2>
+        <p class="hint">download a copy of everything tied to your Discord ID: game data, levels and warnings. it comes as a JSON file.</p>
+        <a class="btn gold" href="{{ url_for('app_routes.api_my_data') }}" {% if not has_data %}aria-disabled="true" onclick="return false"{% endif %}>{{ icon('download') }}Download my data</a>
+      </section>
+
+      <section class="box">
+        <div class="box-h"><h2>signed in with Discord</h2></div>
+        <p class="hint">this session lasts 7 days. logging out ends it here. to cut off access completely, remove {{ bot_name }} under Discord → User Settings → Authorized Apps.</p>
+        <a class="btn" href="{{ url_for('auth.logout') }}">{{ icon('out') }}Log out</a>
+      </section>
+
+      <section class="box danger" aria-labelledby="del-h">
+        <div class="box-h"><h2 id="del-h">delete my data</h2></div>
+        <p class="hint">removes your game data, levels and warnings from every server and the personal ledger. there's no undo. it doesn't remove you from any server, and the bot will start you fresh if you play again.</p>
+        <form id="del-form" novalidate>
+          <div class="field" style="margin-bottom:12px">
+            <label for="del-confirm">type DELETE to confirm</label>
+            <input type="text" id="del-confirm" autocomplete="off" aria-describedby="del-err" {% if not has_data %}disabled{% endif %}>
+            <span class="err-msg" id="del-err" hidden></span>
+          </div>
+          <button class="btn red" type="submit" {% if not has_data %}disabled{% endif %}>{{ icon('trash') }}Delete everything</button>
+        </form>
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+document.getElementById('del-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('del-confirm');
+  const err = document.getElementById('del-err');
+  const btn = e.target.querySelector('button');
+  if (input.value.trim() !== 'DELETE') {
+    err.textContent = 'type DELETE in capitals to go ahead';
+    err.hidden = false;
+    input.setAttribute('aria-invalid', 'true');
+    input.focus();
+    return;
+  }
+  err.hidden = true;
+  input.removeAttribute('aria-invalid');
+  btn.classList.add('busy');
+  const r = await apiPost('/api/me/delete', { confirm: 'DELETE' });
+  btn.classList.remove('busy');
+  if (r) {
+    toast(r.removed ? `deleted ${r.removed} records` : 'there was nothing left to delete', 'ok');
+    setTimeout(() => location.reload(), 900);
+  }
+});
+</script>
+{% endblock %}

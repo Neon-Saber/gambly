@@ -1,0 +1,43 @@
+{% extends "legal/_doc.html" %}
+{% from "_macros.html" import ph %}
+{% block doc_title %}Terms of Service{% endblock %}
+{% block doc %}
+<p>these terms cover the {{ bot_name }} Discord bot (as a server bot and as a personal app you add to your own account) and this dashboard. {{ bot_name }} is run by {{ who }}. by using either one you agree to these terms. if you don't, don't use them.</p>
+
+<h2>What {{ bot_name }} is</h2>
+<p>a casino and economy game with moderation, tickets, leveling and server setup tools. as a server bot it only runs in one Discord server and leaves any other server it's added to. as a personal app, its games and economy commands work in DMs, group chats and other servers, using a separate personal wallet.</p>
+
+<h2>Chips are not money</h2>
+<p>every balance, bet, win, loss, item and reward in {{ bot_name }} uses chips, a fictional game currency with no real-world value. chips can't be bought, sold, exchanged, cashed out or redeemed for money, goods, services or anything of value. nothing in {{ bot_name }} is real gambling. trading chips for real money or real items, inside or outside Discord, is not allowed. see <a href="/refunds">Payments &amp; Refunds</a>.</p>
+
+<h2>Your account</h2>
+<ul>
+  <li>you need a Discord account and must follow Discord's own <a href="https://discord.com/terms" target="_blank" rel="noopener">Terms of Service</a> and <a href="https://discord.com/guidelines" target="_blank" rel="noopener">Community Guidelines</a>, including their minimum age.</li>
+  <li>you sign in to the dashboard with Discord. we never see your Discord password.</li>
+  <li>one person, one account. alts used to farm chips can be wiped.</li>
+</ul>
+
+<h2>Staff and the dashboard</h2>
+<p>the dashboard only shows servers where Discord says you have Manage Server. what staff can do in the bot depends on their rank. staff and the server owner can change balances, reset accounts, issue warnings, block people from the games and change settings. the server owner decides the rules of their server.</p>
+
+<h2>Acceptable use</h2>
+<p>you agree to follow the <a href="/acceptable-use">Acceptable Use</a> page. breaking it can get your chips adjusted or reset, your games access blocked, or you removed from the server.</p>
+
+<h2>Game balances can change</h2>
+<p>chips, items, levels and progress have no guaranteed value. staff can adjust, reset or remove them, including to fix bugs or undo abuse. features, odds and payouts can change at any time.</p>
+
+<h2>Deleting your stuff</h2>
+<p>you can delete your data at any time with <code>/deletemydata</code> or from <a href="{{ url_for('app_routes.account') }}">your account</a>. see the <a href="/privacy">Privacy Policy</a> for what that removes.</p>
+
+<h2>No warranty</h2>
+<p>{{ bot_name }} and the dashboard are provided as they are, for free, without any warranty. they may go down, lose data, have bugs or stop existing. to the extent the law allows, {{ who }} isn't liable for lost chips, items, progress or anything else that comes from using them, downtime, resets or staff decisions.</p>
+
+<h2>Ending things</h2>
+<p>you can stop using {{ bot_name }} whenever you like. access can be removed from anyone who breaks these terms or the server's rules.</p>
+
+<h2>Changes</h2>
+<p>these terms can change as the bot changes. the date at the top shows the last update. using {{ bot_name }} after a change means you accept the new version.</p>
+
+<h2>Governing law</h2>
+<p>{{ ph('governing law and jurisdiction, for example the country or state the operator lives in') }}</p>
+{% endblock %}

@@ -1,7 +1,11 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>nothing here</title><link rel="stylesheet" href="/static/css/style.css?v=r5"></head>
-<body><div class="solo"><div class="solo-card">
-  <h1 class="page-title">nothing here</h1>
-  <p class="page-sub">that page doesn't exist.</p>
-  <a class="b b-go" href="/dashboard">back to your servers</a>
-</div></div></body></html>
+{% extends "base.html" %}
+{% from "_macros.html" import chip %}
+{% block title %}nothing on this table · {{ bot_name }}{% endblock %}
+{% block content %}
+<section class="err-page"><div>
+  {{ chip('#17432e') }}
+  <h1 class="h1" style="margin-top:14px">nothing on this table</h1>
+  <p>that page doesn't exist. the link might be old.</p>
+  <a class="btn gold" href="/">go home</a>
+</div></section>
+{% endblock %}

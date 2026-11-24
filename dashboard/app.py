@@ -1,4 +1,5 @@
 import csv
+import json
 import io
 import os
 import time
@@ -7,6 +8,7 @@ from urllib.parse import urlencode
 
 from pathlib import Path
 
+from markupsafe import Markup
 from flask import Flask, Blueprint, jsonify, render_template, request, Response, session, redirect, url_for
 
 try:
@@ -44,26 +46,157 @@ def landing():
     )
 
 
-@app_routes.route("/privacy")
-def privacy():
-    # public, no login required - this is the URL you paste into the
-    # Discord Developer Portal's "Privacy Policy URL" field and into the
-    # Privileged Intent request form.
-    return render_template(
-        "privacy.html",
-        bot_name=os.getenv("BOT_NAME", "Gambly"),
-        contact=os.getenv("PRIVACY_CONTACT", "").strip(),
-    )
+LEGAL_PAGES = [
+    ("terms", "Terms of Service", "the rules for using the bot and this site"),
+    ("privacy", "Privacy Policy", "what gets collected, where it lives, how to delete it"),
+    ("cookies", "Cookie Policy", "the one cookie this site sets"),
+    ("acceptable-use", "Acceptable Use", "what you can't do with the bot or the dashboard"),
+    ("refunds", "Payments & Refunds", "there's nothing to buy, and what that means"),
+]
+LEGAL_UPDATED = "24 November 2026"
+
+
+@app_routes.app_context_processor
+def site_context():
+    u = current_user()
+    contact = os.getenv("PRIVACY_CONTACT", "").strip()
+    operator = os.getenv("OPERATOR_NAME", "").strip()
+    todo = lambda t: Markup('<span class="todo">[') + t + Markup(']</span>')
+    return {
+        "who": operator or todo("operator name, set OPERATOR_NAME"),
+        "reach": (Markup('<a href="mailto:{0}">{0}</a>').format(contact) if contact else todo("contact email, set PRIVACY_CONTACT")),
+        "bot_name": os.getenv("BOT_NAME", "Gambly"),
+        "me": u,
+        "me_admin": is_bot_admin() if u else False,
+        "contact": os.getenv("PRIVACY_CONTACT", "").strip(),
+        "operator": os.getenv("OPERATOR_NAME", "").strip(),
+        "legal_pages": LEGAL_PAGES,
+        "legal_updated": LEGAL_UPDATED,
+        "asset_v": "g2",
+    }
+
+
+@app_routes.route("/legal")
+def legal_index():
+    return render_template("legal/index.html")
+
+
+@app_routes.route("/terms")
+def terms():
+    return render_template("legal/terms.html", page="terms")
 
 
 @app_routes.route("/tos")
 def tos():
-    # public, no login required - same idea as /privacy
-    return render_template(
-        "tos.html",
-        bot_name=os.getenv("BOT_NAME", "Gambly"),
-        contact=os.getenv("PRIVACY_CONTACT", "").strip(),
-    )
+    return redirect(url_for("app_routes.terms"), 301)
+
+
+@app_routes.route("/privacy")
+def privacy():
+    return render_template("legal/privacy.html", page="privacy")
+
+
+@app_routes.route("/cookies")
+def cookies():
+    return render_template("legal/cookies.html", page="cookies")
+
+
+@app_routes.route("/acceptable-use")
+def acceptable_use():
+    return render_template("legal/acceptable_use.html", page="acceptable-use")
+
+
+@app_routes.route("/refunds")
+def refunds():
+    return render_template("legal/refunds.html", page="refunds")
+
+
+@app_routes.route("/help")
+def help_center():
+    import help_data
+    return render_template("help.html", sections=help_data.sections(), faq=help_data.FAQ,
+                           invite_url=_invite_url())
+
+
+def _user_data(uid):
+    out = {"user_id": uid, "economy": {}, "levels": {}, "warnings": {}}
+    for path, label in ((d.econ_file, None), (d.personal_econ_file, "personal app")):
+        for gid, g in (d.load(path) or {}).items():
+            u = (g.get("users") or {}).get(uid)
+            if u:
+                out["economy"][gid] = {"server": label or g.get("name") or gid, "account": u}
+    for gid, g in (d.load(d.levels_file) or {}).items():
+        if isinstance(g, dict) and uid in g:
+            out["levels"][gid] = g[uid]
+    for gid, g in (d.load(d.BASE / "warnings.json") or {}).items():
+        if isinstance(g, dict) and g.get(uid):
+            out["warnings"][gid] = g[uid]
+    return out
+
+
+@app_routes.route("/account")
+@login_required
+def account():
+    u = current_user()
+    data = _user_data(str(u["id"]))
+    names = {}
+    for gid, g in (d.load(d.econ_file) or {}).items():
+        names[gid] = g.get("name") or gid
+    rows = []
+    for gid, e in data["economy"].items():
+        a = e["account"]
+        lv = data["levels"].get(gid) or {}
+        rows.append({"gid": gid, "server": e["server"], "bal": a.get("bal", 0), "bank": a.get("bank", 0),
+                     "rebirths": a.get("rebirths", 0), "level": lv.get("level"), "warnings": len(data["warnings"].get(gid) or []),
+                     "loan": (a.get("loan") or {}).get("owed", 0)})
+    for gid, lv in data["levels"].items():
+        if gid not in data["economy"]:
+            rows.append({"gid": gid, "server": names.get(gid, gid), "bal": None, "bank": None, "rebirths": None,
+                         "level": lv.get("level"), "warnings": len(data["warnings"].get(gid) or []), "loan": 0})
+    manage = [g for g in (session.get("guilds") or []) if dapi.can_manage(g)]
+    return render_template("account.html", rows=rows, manage_count=len(manage),
+                           guild_count=len(session.get("guilds") or []),
+                           has_data=bool(data["economy"] or data["levels"] or data["warnings"]))
+
+
+@app_routes.route("/api/me/data")
+@login_required
+def api_my_data():
+    uid = str(current_user()["id"])
+    body = json.dumps(_user_data(uid), indent=2, default=str)
+    return Response(body, mimetype="application/json",
+                    headers={"Content-Disposition": f"attachment; filename=gambly-data-{uid}.json"})
+
+
+@app_routes.route("/api/me/delete", methods=["POST"])
+@login_required
+def api_my_delete():
+    if (request.get_json() or {}).get("confirm") != "DELETE":
+        return jsonify({"error": "type DELETE to confirm"}), 400
+    uid = str(current_user()["id"])
+    removed = 0
+    for path in (d.econ_file, d.personal_econ_file):
+        data = d.load(path) or {}
+        hit = False
+        for g in data.values():
+            if uid in (g.get("users") or {}):
+                del g["users"][uid]
+                hit = True
+                removed += 1
+        if hit:
+            d.save(path, data)
+    for path in (d.levels_file, d.BASE / "warnings.json"):
+        data = d.load(path) or {}
+        hit = False
+        for g in data.values():
+            if isinstance(g, dict) and uid in g:
+                del g[uid]
+                hit = True
+                removed += 1
+        if hit:
+            d.save(path, data)
+    d.log_event("dashboard", f"a user deleted their own data ({removed} records)", actor=uid)
+    return jsonify({"ok": True, "removed": removed})
 
 
 @app_routes.route("/invite")

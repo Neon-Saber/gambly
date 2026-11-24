@@ -1,74 +1,51 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ bot_name }} dashboard</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='r5') }}">
-</head>
-<body data-gid="{{ gid }}" data-bot-admin="{{ '1' if bot_admin else '0' }}" data-bot-name="{{ bot_name }}">
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% set nav = 'servers' %}
+{% block title %}dashboard · {{ bot_name }}{% endblock %}
+{% block body_attrs %} data-gid="{{ gid }}" data-bot-name="{{ bot_name }}"{% endblock %}
+{% block top_extra %}<button class="btn quiet sm" type="button" id="open-palette" aria-keyshortcuts="Control+K">{{ icon('search') }}jump to <span class="kbd-hint">ctrl k</span></button>{% endblock %}
+{% block layout %}
 <div class="app">
-  <aside class="side">
-    <a class="brand" href="{{ url_for('app_routes.dashboard_home') }}">{% include "_mark.html" %}<span class="brand-name">{{ bot_name }}</span></a>
-    <div class="server-chip">
-      <div class="av" id="side-icon"></div>
-      <div style="min-width:0"><div class="sname" id="side-name">loading</div><div class="ssub" id="side-sub"></div></div>
-    </div>
-    <div class="side-search">
-      <i data-lucide="search"></i>
-      <input type="text" id="find" placeholder="find a setting" autocomplete="off">
-      <div class="search-hits" id="find-hits" style="display:none"></div>
-    </div>
-
-    <div class="side-label">floor</div>
-    <button class="nav" data-page="overview"><i data-lucide="layout-dashboard"></i>Overview</button>
-    <button class="nav" data-page="players"><i data-lucide="users"></i>Players</button>
-    <button class="nav" data-page="bounties" data-server><i data-lucide="crosshair"></i>Bounties</button>
-
-    <div class="side-label" data-server>casino</div>
-    <button class="nav" data-page="economy" data-server><i data-lucide="coins"></i>Economy</button>
-    <button class="nav" data-page="games" data-server><i data-lucide="dice-5"></i>Games</button>
-
-    <div class="side-label" data-server>server</div>
-    <button class="nav" data-page="leveling" data-server><i data-lucide="sparkles"></i>Welcome &amp; levels</button>
-    <button class="nav" data-page="logs" data-server><i data-lucide="scroll-text"></i>Logs &amp; tickets</button>
-    <button class="nav" data-page="builder" data-server><i data-lucide="hammer"></i>Server builder</button>
-
-    <div class="side-label" data-server>staff</div>
-    <button class="nav" data-page="staff" data-server><i data-lucide="shield"></i>Staff &amp; roles<span class="pill">new</span></button>
-
-    <div class="side-label">records</div>
-    <button class="nav" data-page="rebirths" data-server><i data-lucide="refresh-ccw"></i>Rebirths</button>
-    <button class="nav" data-page="activity"><i data-lucide="history"></i>Activity</button>
-    <button class="nav" data-page="personal"><i data-lucide="smartphone"></i>Personal app</button>
-    <button class="nav bad" data-page="danger" data-server><i data-lucide="triangle-alert"></i>Danger zone</button>
-
-    <div class="side-foot">
-      <a href="{{ url_for('app_routes.dashboard_home') }}">all servers</a>
-      <a href="{{ url_for('auth.logout') }}">log out</a>
-      <a href="{{ url_for('app_routes.privacy') }}">privacy</a>
-    </div>
-  </aside>
-
-  <main class="main">
-    <section class="page" id="p-overview"></section>
-    <section class="page" id="p-players"></section>
-    <section class="page" id="p-bounties"></section>
-    <section class="page" id="p-economy"></section>
-    <section class="page" id="p-games"></section>
-    <section class="page" id="p-leveling"></section>
-    <section class="page" id="p-logs"></section>
-    <section class="page" id="p-builder"></section>
-    <section class="page" id="p-staff"></section>
-    <section class="page" id="p-rebirths"></section>
-    <section class="page" id="p-activity"></section>
-    <section class="page" id="p-personal"></section>
-    <section class="page" id="p-danger"></section>
+  <nav class="rail-nav" aria-label="dashboard">
+    <div class="srv"><span class="srv-ic" id="srv-ic"></span><div style="min-width:0"><b id="srv-name">loading</b><small id="srv-sub">&nbsp;</small></div></div>
+    <div class="nav-h">the floor</div>
+    <button class="nav-a" data-view="overview">{{ icon('home') }}Overview</button>
+    <button class="nav-a" data-view="players">{{ icon('users') }}Players</button>
+    <button class="nav-a" data-view="bounties" data-server>{{ icon('target') }}Bounties</button>
+    <div class="nav-h" data-server>the casino</div>
+    <button class="nav-a" data-view="economy" data-server>{{ icon('coins') }}House rules</button>
+    <button class="nav-a" data-view="games" data-server>{{ icon('dice') }}Games</button>
+    <div class="nav-h" data-server>the server</div>
+    <button class="nav-a" data-view="leveling" data-server>{{ icon('spark') }}Welcome &amp; levels</button>
+    <button class="nav-a" data-view="logs" data-server>{{ icon('scroll') }}Logs &amp; tickets</button>
+    <button class="nav-a" data-view="builder" data-server>{{ icon('hammer') }}Server builder</button>
+    <button class="nav-a" data-view="staff" data-server>{{ icon('shield') }}Staff &amp; roles<span class="new">new</span></button>
+    <div class="nav-h">records</div>
+    <button class="nav-a" data-view="rebirths" data-server>{{ icon('refresh') }}Rebirths</button>
+    <button class="nav-a" data-view="activity">{{ icon('clock') }}Activity</button>
+    <button class="nav-a" data-view="personal">{{ icon('phone') }}Personal app</button>
+    <button class="nav-a danger" data-view="danger" data-server>{{ icon('alert') }}Danger zone</button>
+  </nav>
+  <main class="stage" id="main" tabindex="-1">
+    {% for v in ['overview','players','bounties','economy','games','leveling','logs','builder','staff','rebirths','activity','personal','danger'] %}
+    <section class="view" id="v-{{ v }}" aria-live="polite"><div class="state"><span class="skel" style="max-width:320px;margin:0 auto 10px"></span><span class="skel" style="max-width:220px;margin:0 auto"></span></div></section>
+    {% endfor %}
   </main>
 </div>
-<div id="toast-root"></div>
-<script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
-<script src="{{ url_for('static', filename='js/api.js', v='r5') }}"></script>
-<script src="{{ url_for('static', filename='js/guild.js', v='r5') }}"></script>
-</body>
-</html>
+<div class="palette-bg" id="palette" role="dialog" aria-modal="true" aria-label="jump to">
+  <div class="palette">
+    <label class="sr" for="pal-input">jump to a page or setting</label>
+    <input type="text" id="pal-input" placeholder="jump to a page or setting…" autocomplete="off" role="combobox" aria-expanded="true" aria-controls="pal-list">
+    <ul id="pal-list" role="listbox"></ul>
+    <div class="p-foot">↑ ↓ to move · enter to go · esc to close</div>
+  </div>
+</div>
+<div class="savebar" id="savebar" role="region" aria-label="unsaved changes">
+  <span id="savebar-text">you have unsaved changes</span>
+  <button class="btn quiet sm" type="button" id="savebar-discard">Discard</button>
+  <button class="btn gold sm" type="button" id="savebar-save">Save all</button>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/guild.js', v=asset_v) }}"></script>
+{% endblock %}

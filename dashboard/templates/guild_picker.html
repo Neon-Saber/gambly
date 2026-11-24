@@ -1,63 +1,72 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ bot_name }} · pick a server</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='r5') }}">
-</head>
-<body>
+{% extends "base.html" %}
+{% from "_macros.html" import chip, icon, avatar %}
+{% set nav = 'servers' %}
+{% block title %}your tables · {{ bot_name }}{% endblock %}
+{% block content %}
 <div class="wrap">
-  <div class="bar-top">
-    <a class="brand" href="{{ url_for('app_routes.dashboard_home') }}">{% include "_mark.html" %}<span class="brand-name">{{ bot_name }}</span></a>
-    <div class="row">
-      {% if bot_admin %}<a class="b b-sm" href="{{ url_for('app_routes.bot_admin_home') }}">Bot admin</a>{% endif %}
-      <a class="b b-sm b-ghost" href="{{ url_for('auth.logout') }}">Log out</a>
+  <div class="split-head">
+    <div>
+      <p class="eyebrow">signed in as {{ me.global_name or me.username }}</p>
+      <h1 class="h1">pick a table</h1>
+      <p class="lede" style="margin-bottom:0">servers where you have Manage Server. the dashed ones don't have {{ bot_name }} in them.</p>
     </div>
+    <a class="btn gold" href="{{ invite_url }}" target="_blank" rel="noopener">{{ icon('plus') }}Add {{ bot_name }}</a>
   </div>
-  <h1 class="page-title">pick a server</h1>
-  <p class="page-sub">servers where you have Manage Server. the dashed ones don't have {{ bot_name }} yet.</p>
   {% if guilds %}
-  <div class="row" style="margin-bottom:16px;max-width:360px;">
-    <input type="search" id="server-search" placeholder="find a server" autocomplete="off">
+  <div class="filters" role="search">
+    <label class="sr" for="srv-find">search your servers</label>
+    <input type="search" id="srv-find" placeholder="search your servers" autocomplete="off">
+    <div class="pill-set" role="group" aria-label="show">
+      <button type="button" data-show="all" aria-pressed="true">all</button>
+      <button type="button" data-show="on" aria-pressed="false">has {{ bot_name }}</button>
+      <button type="button" data-show="off" aria-pressed="false">doesn't</button>
+    </div>
+    <span class="count" id="srv-count">{{ guilds|length }} servers</span>
   </div>
-  <div class="servers" id="guild-grid">
+  <div class="tables" id="srv-list">
     {% for g in guilds %}
-    <a class="server{% if not g.installed %} off{% endif %}" data-name="{{ g.name|lower }}"
+    <a class="tbl-row{% if not g.installed %} off{% endif %}" data-name="{{ g.name|lower }}" data-on="{{ '1' if g.installed else '0' }}"
        href="{% if g.installed %}{{ url_for('app_routes.dashboard_guild', gid=g.id) }}{% else %}{{ invite_url }}{% endif %}"
        {% if not g.installed %}target="_blank" rel="noopener"{% endif %}>
-      <div class="av lg">{% if g.icon %}<img src="{{ g.icon }}" alt="">{% else %}{{ g.name[:1] }}{% endif %}</div>
-      <div style="min-width:0">
-        <div class="sname">{{ g.name }}</div>
-        {% if g.installed %}<span class="tag ok">open</span>{% else %}<span class="tag">add {{ bot_name }}</span>{% endif %}
-      </div>
+      {{ avatar(g.name, g.icon) }}
+      <span style="min-width:0"><b>{{ g.name }}</b><small>{% if g.installed %}open the dashboard{% else %}not added yet, click to invite{% endif %}</small></span>
+      {% if g.installed %}<span class="tag gold">open</span>{% else %}<span class="tag">invite</span>{% endif %}
     </a>
     {% endfor %}
   </div>
-  <div class="empty" id="guild-search-empty" style="display:none;">nothing matches that</div>
+  <div class="state" id="srv-none" hidden><b>nothing matches</b>try a different name or filter</div>
   {% else %}
-  <div class="panel empty">you don't manage any servers yet. once you have Manage Server somewhere, it shows up here.</div>
+  <div class="box state">{{ chip('#17432e') }}<b>no servers to manage yet</b>once you have Manage Server somewhere, it shows up here.</div>
   {% endif %}
-  <p style="margin-top:28px"><a class="b b-go" href="{{ invite_url }}" target="_blank" rel="noopener">Add {{ bot_name }} to a server</a></p>
-  <p class="fine"><a href="{{ url_for('app_routes.tos') }}">terms</a> · <a href="{{ url_for('app_routes.privacy') }}">privacy</a></p>
 </div>
+{% endblock %}
+{% block scripts %}
 <script>
 (function () {
-  const input = document.getElementById('server-search');
-  if (!input) return;
-  const cards = Array.from(document.querySelectorAll('#guild-grid .server'));
-  const none = document.getElementById('guild-search-empty');
-  input.addEventListener('input', () => {
-    const q = input.value.trim().toLowerCase();
-    let shown = 0;
-    cards.forEach((c) => {
-      const hit = !q || (c.dataset.name || '').includes(q);
-      c.style.display = hit ? '' : 'none';
-      if (hit) shown++;
+  const find = document.getElementById('srv-find');
+  if (!find) return;
+  const rows = Array.from(document.querySelectorAll('#srv-list .tbl-row'));
+  let show = 'all';
+  function apply() {
+    const q = find.value.trim().toLowerCase();
+    let n = 0;
+    rows.forEach((r) => {
+      const hit = (!q || r.dataset.name.includes(q)) && (show === 'all' || (show === 'on') === (r.dataset.on === '1'));
+      r.hidden = !hit;
+      if (hit) n++;
     });
-    none.style.display = shown ? 'none' : '';
+    document.getElementById('srv-count').textContent = n + (n === 1 ? ' server' : ' servers');
+    document.getElementById('srv-none').hidden = n > 0;
+  }
+  find.addEventListener('input', apply);
+  document.querySelectorAll('[data-show]').forEach((b) => b.addEventListener('click', () => {
+    show = b.dataset.show;
+    document.querySelectorAll('[data-show]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    apply();
+  }));
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); find.focus(); }
   });
 })();
 </script>
-</body>
-</html>
+{% endblock %}

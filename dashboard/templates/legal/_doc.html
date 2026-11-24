@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}{% block doc_title %}{% endblock %} · {{ bot_name }}{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div class="doc-layout">
+    <nav class="doc-nav" aria-label="policies">
+      <a href="{{ url_for('app_routes.legal_index') }}" {% if not page %}aria-current="page"{% endif %}>all policies</a>
+      {% for slug, label, _ in legal_pages %}<a href="/{{ slug }}" {% if page == slug %}aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+    </nav>
+    <article class="doc">
+      <p class="eyebrow">legal</p>
+      <h1 class="h1">{{ self.doc_title() }}</h1>
+      <p class="updated">last updated {{ legal_updated }}</p>
+      {% block doc %}{% endblock %}
+      <h2>Contact</h2>
+      <p>questions about this page or your data: {{ reach }}. you can also open a ticket in the main server.</p>
+    </article>
+  </div>
+</div>
+{% endblock %}

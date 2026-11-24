@@ -1,48 +1,42 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ bot_name }} · bot admin</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='r5') }}">
-</head>
-<body>
-<div class="wrap" style="max-width:1100px">
-  <div class="bar-top">
-    <a class="brand" href="{{ url_for('app_routes.dashboard_home') }}">{% include "_mark.html" %}<span class="brand-name">{{ bot_name }}</span></a>
-    <div class="row">
-      <a class="b b-sm b-ghost" href="{{ url_for('app_routes.dashboard_home') }}">your servers</a>
-      <a class="b b-sm b-ghost" href="{{ url_for('auth.logout') }}">log out</a>
-    </div>
-  </div>
-  <div class="row" style="justify-content:space-between;align-items:flex-start;margin-bottom:18px">
+{% extends "base.html" %}
+{% from "_macros.html" import icon %}
+{% set nav = 'admin' %}
+{% block title %}bot admin · {{ bot_name }}{% endblock %}
+{% block content %}
+<div class="wrap">
+  <div class="split-head">
     <div>
-      <h1 class="page-title">bot admin</h1>
-      <p class="page-sub" style="margin-bottom:0">every server at once. only accounts in BOT_ADMIN_IDS see this.</p>
+      <p class="eyebrow">only for accounts in BOT_ADMIN_IDS</p>
+      <h1 class="h1">the back office</h1>
+      <p class="lede" style="margin-bottom:0">every server and ledger at once.</p>
     </div>
-    <a class="b" href="/api/export_all.csv">export every balance</a>
+    <a class="btn" href="/api/export_all.csv">{{ icon('download') }}Export every balance</a>
   </div>
-  <div class="hero" id="admin-stats"></div>
-  <div class="panel">
-    <div class="panel-head"><h2>find a player anywhere</h2></div>
-    <div class="row" style="max-width:420px;margin-bottom:12px"><input type="search" id="admin-search" placeholder="name or user id"></div>
-    <div class="tbl-wrap"><table class="tbl" id="admin-search-table"><thead>
-      <tr><th>player</th><th>server</th><th class="n">wallet</th><th class="n">bank</th></tr>
-    </thead><tbody></tbody></table></div>
+  <div class="tiles" id="admin-stats"><div class="tile"><span class="skel"></span></div><div class="tile"><span class="skel"></span></div><div class="tile"><span class="skel"></span></div><div class="tile"><span class="skel"></span></div></div>
+
+  <div class="cols">
+    <section>
+      <h2 class="sec-title">find a player anywhere</h2>
+      <p class="sec-sub">by name or Discord user ID.</p>
+      <label class="sr" for="admin-search">find a player</label>
+      <input type="search" id="admin-search" placeholder="name or user id" style="max-width:360px;margin-bottom:12px">
+      <div class="ledger-wrap"><table class="ledger"><thead><tr><th>player</th><th>where</th><th class="r">wallet</th><th class="r">bank</th></tr></thead>
+        <tbody id="admin-results"><tr><td colspan="4" class="state">type to search</td></tr></tbody></table></div>
+    </section>
+    <section class="slip">
+      <span class="pip" aria-hidden="true">♠</span>
+      <h2>house defaults</h2>
+      <p class="hint">used by every server unless it overrides them.</p>
+      <form id="defaults" novalidate><div class="fields" id="admin-settings-fields" style="grid-template-columns:1fr 1fr"></div>
+        <button class="btn gold" type="submit">Save defaults</button></form>
+    </section>
   </div>
-  <div class="panel">
-    <div class="panel-head"><h2>every server</h2><span class="note">red ones have data but the bot isn't in them. that's almost always someone using the personal app there.</span></div>
-    <div class="servers" id="admin-guilds-grid"></div>
-  </div>
-  <div class="panel">
-    <div class="panel-head"><h2>defaults for every server</h2></div>
-    <div class="grid2" id="admin-settings-fields"></div>
-    <button class="b b-go" id="admin-settings-save">Save</button>
-  </div>
-  <p class="fine"><a href="{{ url_for('app_routes.tos') }}">terms</a> · <a href="{{ url_for('app_routes.privacy') }}">privacy</a></p>
+
+  <h2 class="sec-title" style="margin-top:10px">every server</h2>
+  <p class="sec-sub">red ones have data but the bot isn't in them. that's almost always someone using the personal app there.</p>
+  <div class="tables" id="admin-guilds"><div class="tbl-row"><span class="skel" style="grid-column:1/-1"></span></div></div>
 </div>
-<div id="toast-root"></div>
-<script src="{{ url_for('static', filename='js/api.js', v='r5') }}"></script>
-<script src="{{ url_for('static', filename='js/bot_admin.js', v='r5') }}"></script>
-</body>
-</html>
+{% endblock %}
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/bot_admin.js', v=asset_v) }}"></script>
+{% endblock %}
