@@ -1676,11 +1676,6 @@ async def do_deletemydata(ctx):
         removed.append("your casino/economy account (balance, bank, inventory, business, achievements)")
 
     if is_real_guild(space):
-        warns = load_warnings()
-        if warns.get(gid, {}).get(uid):
-            warns[gid][uid] = []
-            save_warnings(warns)
-            removed.append("your moderation warning history")
         lv = store.load(Path(__file__).parent / "levels.json")
         if lv.get(gid, {}).pop(uid, None) is not None:
             store.save(Path(__file__).parent / "levels.json", lv)
@@ -1688,13 +1683,14 @@ async def do_deletemydata(ctx):
 
     if removed:
         where = "this server" if is_real_guild(space) else "your personal ledger"
-        await reply(ctx, content=f"🗑️ deleted {' and '.join(removed)} for {where}. this can't be undone.",
+        await reply(ctx, content=f"🗑️ deleted {' and '.join(removed)} for {where}. this can't be undone. "
+                                 f"moderation records like warnings are kept so staff can still enforce the rules.",
                     ephemeral=True)
     else:
         await reply(ctx, content="couldn't find any stored data for you here to delete.", ephemeral=True)
 
 
-@bot.slash_command(name="deletemydata", description="permanently delete your stored casino/economy data and warning history")
+@bot.slash_command(name="deletemydata", description="permanently delete your game data and level here (moderation records are kept)")
 async def deletemydata(ctx):
     await do_deletemydata(ctx)
 

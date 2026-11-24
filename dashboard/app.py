@@ -185,7 +185,7 @@ def api_my_delete():
                 removed += 1
         if hit:
             d.save(path, data)
-    for path in (d.levels_file, d.BASE / "warnings.json"):
+    for path in (d.levels_file,):
         data = d.load(path) or {}
         hit = False
         for g in data.values():

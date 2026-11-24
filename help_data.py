@@ -10,7 +10,7 @@ HELP_TEXT = (
     "`/claim weekly` · `/claim monthly` · `/claim spin` (daily wheel) · `quests` (3 a day) · `trivia` · "
     "`/gather fish|mine|hunt` (10 min cooldown, loot sells instantly) · `/gather collection`\n\n"
     "**your data**\n"
-    "`deletemydata` wipes your account and warnings for good, no staff needed\n\n"
+    "`deletemydata` wipes your game account and level for good, no staff needed. warnings and other moderation records stay\n\n"
     "**classic games**\n"
     "`coinflip <amt> <heads/tails>` · `slots <amt>` · `jackpot` · `dice <amt> <1-6>` · `roulette <amt> <red/black/green/0-36>` · "
     "`allin <red/black>` · `blackjack <amt>` · `war <amt>` · `hilo <amt>` · `crash <amt> <x>` · `mines <amt> [mines]` · "
@@ -86,7 +86,7 @@ FAQ = [
     ("Who can use staff commands?",
      "It depends on your rank, from Trial Security up to the server owner. /mod ranks in Discord or the Staff & roles page here shows exactly what each rank can do. Nobody can act on someone ranked the same or higher."),
     ("How do I delete my data?",
-     "Run /deletemydata in Discord, or use Delete my data on your Account page here. Both remove your balances, levels and warnings and can't be undone."),
+     "Run /deletemydata in Discord, or use Delete my data on your Account page here. Both remove your balances and levels and can't be undone. Warnings and other moderation records are kept so staff can still enforce the rules. If you think one is wrong, open a ticket."),
     ("Can I add the bot to my own server?",
      "Not as a server bot. It's locked to one server and leaves anywhere else. You can still use the personal app to play anywhere."),
 ]
