@@ -131,15 +131,21 @@ GAME_CHANNEL_ALIASES = {
     "heist": ["heist"],
     "tictactoe": ["tictactoe", "tic-tac-toe"],
     "scratch": ["scratch"],
+    "craps": ["craps"],
+    "threecard": ["threecard", "three-card"],
+    "bingo": ["bingo"],
+    "penalty": ["penalty"],
+    "doors": ["doors"],
+    "connect4": ["connect4", "connect-4"],
 }
 
 GAME_GROUPS = {
-    "card-tables": {"emoji": "🃏", "games": ["blackjack", "baccarat", "war", "hilo", "videopoker", "dragontiger", "cardguess"]},
+    "card-tables": {"emoji": "🃏", "games": ["blackjack", "baccarat", "war", "hilo", "videopoker", "dragontiger", "cardguess", "threecard"]},
     "slots-and-spins": {"emoji": "🎰", "games": ["slots", "jackpot", "wheel", "chests", "scratch", "keno"]},
-    "dice-games": {"emoji": "🎲", "games": ["dice", "sicbo", "sevens", "diceduel", "target"]},
+    "dice-games": {"emoji": "🎲", "games": ["dice", "sicbo", "sevens", "diceduel", "target", "craps"]},
     "crash-and-mines": {"emoji": "🚀", "games": ["crash", "rocket", "mines", "towers", "balloon", "plinko", "ladder"]},
-    "quick-bets": {"emoji": "🪙", "games": ["coinflip", "rps", "cups", "revolver", "roulette", "allin", "horserace"]},
-    "pvp-arena": {"emoji": "⚔️", "games": ["duel", "tictactoe", "heist"]},
+    "quick-bets": {"emoji": "🪙", "games": ["coinflip", "rps", "cups", "revolver", "roulette", "allin", "horserace", "bingo", "penalty", "doors"]},
+    "pvp-arena": {"emoji": "⚔️", "games": ["duel", "tictactoe", "connect4", "heist"]},
 }
 
 
@@ -217,19 +223,17 @@ async def resolve_channel(guild, channel_id):
 
 
 def staff_check():
-    """Reusable version of cogs/moderation.py's own staff_check() - lets
-    anyone with this server's configured staff role (plus server
-    Administrators, always) use a command. Imported locally to avoid a
-    circular import at module load time."""
     from discord.ext import commands
-    import logging_utils
+    import perms
 
     async def predicate(ctx):
         if not isinstance(ctx.author, discord.Member):
             return False
-        if logging_utils.is_staff(ctx.author):
+        ok, why = perms.allowed(ctx.author, ctx.command.name if ctx.command else "", 6)
+        if ok:
             return True
-        raise commands.MissingPermissions(["manage_guild"])
+        await respond(ctx, why, ephemeral=True)
+        raise perms.Denied()
     return commands.check(predicate)
 
 

@@ -189,7 +189,8 @@ GAME_EMOJI = {
     "towers": "🗼", "cups": "🥤", "dragontiger": "🐉", "sicbo": "🎲", "sevens": "7️⃣",
     "videopoker": "🂡", "revolver": "🔫", "balloon": "🎈", "chests": "🧰", "diceduel": "🎲",
     "cardguess": "🃏", "target": "🎯", "rocket": "🚀", "heist": "💰", "tictactoe": "⭕",
-    'scratch': '🎟️', 'jackpot': '💎',
+    'scratch': '🎟️', 'jackpot': '💎', 'craps': '🎲', 'threecard': '🃏', 'bingo': '🅱️',
+    'penalty': '⚽', 'doors': '🚪', 'connect4': '🔴',
 }
 
 
@@ -256,26 +257,51 @@ PING_ROLES = [
 
 MOD_PERMS = ["kick_members", "ban_members", "moderate_members", "manage_messages", "manage_nicknames",
              "mute_members", "move_members", "view_audit_log"]
+BOSS_PERMS = MOD_PERMS + ["manage_guild", "manage_channels", "manage_roles", "manage_events", "mention_everyone",
+                          "manage_threads", "manage_emojis"]
 
 ROLE_KIT = [
-    {"key": "staff", "title": "Staff team", "emoji": "🛡️", "roles": [
-        {"slug": "admin", "name": "Admin", "color": 0xE74C3C, "hoist": True,
-         "perms": MOD_PERMS + ["manage_guild", "manage_channels", "manage_roles", "manage_webhooks", "manage_emojis"]},
-        {"slug": "mod", "name": "Moderator", "color": 0x3498DB, "hoist": True, "perms": MOD_PERMS},
-        {"slug": "trial", "name": "Trial Mod", "color": 0x85C1E9, "hoist": True, "perms": ["manage_messages", "moderate_members"]},
-        {"slug": "staff", "name": "Staff", "color": 0xFF6AD5, "hoist": True, "cfg": "staff_role_id",
-         "perms": ["manage_messages", "kick_members", "moderate_members", "mute_members"]},
-        {"slug": "manager", "name": "Casino Manager", "color": 0xF5C542, "cfg": "manager_role"},
-        {"slug": "host", "name": "Event Host", "color": 0x9B59B6, "perms": ["mention_everyone", "manage_events"]},
+    {"key": "staff", "title": "Management", "emoji": "👑", "divider": "──── ⋆ management ⋆ ────", "roles": [
+        {"slug": "house", "name": "👑 The House", "color": 0xFFD43B, "hoist": True},
+        {"slug": "coowner", "name": "💎 Co-Owner", "color": 0xB197FC, "hoist": True, "tier": 8,
+         "perms": BOSS_PERMS + ["manage_webhooks"]},
+        {"slug": "pitboss", "name": "🎩 Pit Boss", "color": 0xFF6B6B, "hoist": True, "tier": 7, "perms": BOSS_PERMS,
+         "aliases": ["Head Admin"]},
+        {"slug": "floor", "name": "💼 Floor Manager", "color": 0xFF922B, "hoist": True, "tier": 6,
+         "perms": MOD_PERMS + ["manage_events", "mention_everyone", "manage_threads"], "aliases": ["Admin"]},
     ]},
-    {"key": "special", "title": "Special", "emoji": "💎", "roles": [
+    {"key": "security", "title": "Security", "emoji": "🛡️", "divider": "──── ⋆ security ⋆ ────", "roles": [
+        {"slug": "head", "name": "🛡️ Head of Security", "color": 0x4DABF7, "hoist": True, "tier": 5,
+         "perms": MOD_PERMS, "aliases": ["Head Moderator", "Head Mod"]},
+        {"slug": "senior", "name": "🕶️ Senior Security", "color": 0x74C0FC, "hoist": True, "tier": 4,
+         "perms": ["kick_members", "moderate_members", "manage_messages", "manage_nicknames", "mute_members",
+                   "move_members", "view_audit_log"], "aliases": ["Senior Moderator", "Senior Mod"]},
+        {"slug": "sec", "name": "🔦 Security", "color": 0x63E6BE, "hoist": True, "tier": 3,
+         "perms": ["kick_members", "moderate_members", "manage_messages", "mute_members", "move_members"],
+         "aliases": ["Moderator"]},
+        {"slug": "junior", "name": "🪪 Junior Security", "color": 0x96F2D7, "hoist": True, "tier": 2,
+         "perms": ["moderate_members", "manage_messages"], "aliases": ["Junior Moderator", "Junior Mod"]},
+        {"slug": "trial", "name": "🎟️ Trial Security", "color": 0xC3FAE8, "hoist": True, "tier": 1,
+         "perms": ["moderate_members"], "aliases": ["Trial Mod", "Trial Moderator"]},
+    ]},
+    {"key": "crew", "title": "Floor crew", "emoji": "🎰", "divider": "──── ⋆ floor crew ⋆ ────", "roles": [
+        {"slug": "dealer", "name": "🎰 Dealer", "color": 0xF5C542, "side": "dealer", "perms": ["manage_events"],
+         "cfg": "manager_role", "aliases": ["Casino Manager", "Casino Staff"]},
+        {"slug": "host", "name": "🎤 Event Host", "color": 0xDA77F2, "side": "host",
+         "perms": ["manage_events", "mention_everyone"], "aliases": ["Event Host"]},
+        {"slug": "partners", "name": "🤝 Partner Manager", "color": 0x38D9A9, "side": "partners"},
+        {"slug": "media", "name": "📸 Media Team", "color": 0xF783AC, "side": "media"},
+        {"slug": "team", "name": "🃏 Staff Team", "color": 0xFF6AD5, "cfg": "staff_role_id", "aliases": ["Staff"]},
+        {"slug": "break", "name": "😴 On Break", "color": 0xADB5BD},
+    ]},
+    {"key": "special", "divider": "──── ⋆ special ⋆ ────", "title": "Special", "emoji": "💎", "roles": [
         {"slug": "vip", "name": "VIP", "color": 0xF1C40F, "hoist": True},
         {"slug": "partner", "name": "Partner", "color": 0x1ABC9C},
         {"slug": "creator", "name": "Content Creator", "color": 0xE91E63},
         {"slug": "og", "name": "OG", "color": 0xA569BD},
         {"slug": "bots", "name": "Bots", "color": 0x7289DA, "hoist": True},
     ]},
-    {"key": "colors", "title": "Name colors", "emoji": "🎨", "self": True, "exclusive": True,
+    {"key": "colors", "divider": "──── ⋆ colors ⋆ ────", "title": "Name colors", "emoji": "🎨", "self": True, "exclusive": True,
      "blurb": "pick a color for your name - picking a new one swaps it", "roles": [
         {"slug": "red", "name": "Red", "color": 0xFF4D4D, "emoji": "🔴"},
         {"slug": "orange", "name": "Orange", "color": 0xFF9F43, "emoji": "🟠"},
@@ -288,7 +314,7 @@ ROLE_KIT = [
         {"slug": "white", "name": "White", "color": 0xFDFDFD, "emoji": "⚪"},
         {"slug": "black", "name": "Black", "color": 0x111111, "emoji": "⚫"},
     ]},
-    {"key": "rebirths", "title": "Rebirth ranks", "emoji": "♻️", "bind": "rebirth_roles", "roles": [
+    {"key": "rebirths", "divider": "──── ⋆ ranks ⋆ ────", "title": "Rebirth ranks", "emoji": "♻️", "bind": "rebirth_roles", "roles": [
         {"slug": "r1", "name": "Rebirth I", "color": 0xB2F2BB, "at": 1},
         {"slug": "r2", "name": "Rebirth II", "color": 0x8CE99A, "at": 2},
         {"slug": "r3", "name": "Rebirth III", "color": 0x63E6BE, "at": 3},
@@ -306,7 +332,7 @@ ROLE_KIT = [
         {"slug": "l75", "name": "Lv 75 · Whale", "color": 0x845EF7, "at": 75},
         {"slug": "l100", "name": "Lv 100 · Legend", "color": 0xFCC419, "at": 100},
     ]},
-    {"key": "pings", "title": "Pings", "emoji": "🔔", "self": True,
+    {"key": "pings", "divider": "──── ⋆ pings ⋆ ────", "title": "Pings", "emoji": "🔔", "self": True,
      "blurb": "pick what you want to get pinged for - tap again to remove", "roles": [
         {"slug": "announce", "name": "Announcements", "color": 0xFF8787, "emoji": "📢"},
         {"slug": "giveaways", "name": "Giveaways", "color": 0xFFD43B, "emoji": "🎉"},
@@ -317,7 +343,7 @@ ROLE_KIT = [
         {"slug": "partners", "name": "Partnerships", "color": 0xFFA94D, "emoji": "🤝"},
         {"slug": "gamenight", "name": "Game Night", "color": 0xF783AC, "emoji": "🎮"},
     ]},
-    {"key": "pronouns", "title": "Pronouns", "emoji": "🏷️", "self": True, "blurb": "optional - pick any that fit", "roles": [
+    {"key": "pronouns", "divider": "──── ⋆ about me ⋆ ────", "title": "Pronouns", "emoji": "🏷️", "self": True, "blurb": "optional - pick any that fit", "roles": [
         {"slug": "he", "name": "he/him", "emoji": "💙"},
         {"slug": "she", "name": "she/her", "emoji": "💗"},
         {"slug": "they", "name": "they/them", "emoji": "💜"},
@@ -331,4 +357,4 @@ ROLE_KIT = [
     ]},
 ]
 ROLE_KIT_KEYS = [g["key"] for g in ROLE_KIT]
-ROLE_ORDER = ["pronouns", "platforms", "pings", "levels", "rebirths", "special", "colors", "staff"]
+ROLE_ORDER = ["staff", "security", "crew", "special", "colors", "rebirths", "levels", "pings", "pronouns", "platforms"]

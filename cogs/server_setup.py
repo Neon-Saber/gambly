@@ -209,6 +209,17 @@ class ServerSetup(commands.Cog):
         self._views_done = False
     def cog_unload(self):
         self.request_loop.cancel()
+
+    async def cog_check(self, ctx):
+        import perms
+        if ctx.guild is not None and perms.tier_of(ctx.author) >= 9:
+            return True
+        msg = "only the server owner can use the server builder"
+        if isinstance(ctx, discord.ApplicationContext):
+            await ctx.respond(msg, ephemeral=True)
+        else:
+            await ctx.send(msg)
+        raise perms.Denied()
     @commands.Cog.listener()
     async def on_ready(self):
         if not self._views_done:
@@ -262,11 +273,11 @@ class ServerSetup(commands.Cog):
         created = reused = 0
         made_roles = []
         await say('making roles…')
-        staff, new = await self.ensure_role(guild, "staff_role_id", "Staff", accent, hoist=True,
+        staff, new = await self.ensure_role(guild, "staff_role_id", "🃏 Staff Team", accent, hoist=True,
                                        perms=discord.Permissions(manage_messages=True, kick_members=True,
                                                                  moderate_members=True, mute_members=True))
         if new: made_roles.append(str(staff.id))
-        manager, new = await self.ensure_role(guild, "manager_role", "Casino Manager", 0xF5C542)
+        manager, new = await self.ensure_role(guild, "manager_role", "🎰 Dealer", 0xF5C542)
         if new: made_roles.append(str(manager.id))
         ping_roles = []
         existing_pings = {r["name"]: r for r in (read_cfg(guild.id).get("self_roles") or [])}
@@ -470,8 +481,16 @@ class ServerSetup(commands.Cog):
                 if role is None and r.get("cfg") and str(gc.get(r["cfg"]) or "").isdigit():
                     role = guild.get_role(int(gc.get(r["cfg"])))
                 if role is None:
-                    role = by_name.get(r["name"].lower())
+                    for nm in [r["name"]] + r.get("aliases", []):
+                        role = by_name.get(nm.lower())
+                        if role is not None:
+                            break
                 rows.append((key, r, role))
+            if gdef.get("divider"):
+                dk = f"div:{gdef['key']}"
+                drole = guild.get_role(int(kr[dk])) if kr.get(dk) else None
+                drole = drole or by_name.get(gdef["divider"].lower())
+                rows.insert(0, (dk, {"name": gdef["divider"], "slug": dk, "divider": True}, drole))
             out.append((gdef, rows))
         return out
 
@@ -511,7 +530,8 @@ class ServerSetup(commands.Cog):
         kit = dict(read_cfg(guild.id).get("role_kit") or {})
         kr = dict(kit.get("roles") or {})
         made = list(kit.get("created") or [])
-        new = recolored = failed = 0
+        ours = set(made) | set((read_cfg(guild.id).get("server_layout") or {}).get("created_roles") or [])
+        new = recolored = failed = renamed = 0
         top = guild.me.top_role
         for gkey in sl.ROLE_ORDER:
             if gkey not in status:
@@ -519,6 +539,20 @@ class ServerSetup(commands.Cog):
             if progress:
                 await progress(f"roles: {gkey}…")
             for key, r, role in reversed(status[gkey]):
+                if role is not None and role.name != r["name"] and not r.get("divider") and str(role.id) in ours and role < top and not role.managed:
+                    try:
+                        await role.edit(name=r["name"], reason="/setup roles rename")
+                        renamed += 1
+                    except discord.HTTPException:
+                        pass
+                if role is None and r.get("divider"):
+                    try:
+                        role = await guild.create_role(name=r["name"], reason="/setup roles divider")
+                        made.append(str(role.id))
+                        new += 1
+                    except discord.HTTPException:
+                        failed += 1
+                        continue
                 if role is None:
                     perms = discord.Permissions.none()
                     for p in r.get("perms", []):
@@ -545,6 +579,19 @@ class ServerSetup(commands.Cog):
                         pass
                 kr[key] = str(role.id)
 
+        valid = {f"{g['key']}:{r['slug']}" for g in sl.ROLE_KIT for r in g["roles"]} | {f"div:{g['key']}" for g in sl.ROLE_KIT}
+        kr = {k: v for k, v in kr.items() if k in valid}
+        if progress:
+            await progress("putting roles in order…")
+        moved, stuck = await self.fix_role_order(guild, kr)
+        house = guild.get_role(int(kr["staff:house"])) if kr.get("staff:house") else None
+        own = guild.get_member(guild.owner_id) if hasattr(guild, "get_member") else None
+        if house and own and house not in own.roles and house < top:
+            try:
+                await own.add_roles(house, reason="/setup roles")
+            except discord.HTTPException:
+                pass
+
         def save(g):
             k = g.setdefault("role_kit", {})
             k["roles"] = kr
@@ -566,16 +613,53 @@ class ServerSetup(commands.Cog):
             if progress:
                 await progress("posting role panels…")
             posted = await self._post_kit_panels(guild, channel, groups, kr)
-        msg = f"✅ roles done - **{new}** made, **{recolored}** recolored, **{sum(len(v) for v in status.values()) - new - failed}** already there"
+        msg = (f"✅ roles done - **{new}** made, **{renamed}** renamed, **{recolored}** recolored, "
+               f"**{sum(len(v) for v in status.values()) - new - failed}** already there, **{moved}** moved into place")
+        if stuck:
+            msg += f"\n⚠️ {stuck} are above my role so I couldn't move them - drag my role to the top in Server Settings → Roles and run this again"
         if failed:
             msg += f"\n⚠️ {failed} couldn't be made"
         if posted:
             msg += f"\npanels in {channel.mention}: {', '.join(posted)}"
         elif channel is None and any(g.get("self") and g["key"] in groups for g in sl.ROLE_KIT):
             msg += "\nno panel channel - run it again with `panel_channel:` to post the pick-a-role buttons"
-        msg += "\ntip: drag my role above these in Server Settings → Roles so I can hand them out"
         self.bot.casino.log_event(guild.name, f"/setup roles made {new} roles")
         return msg
+
+    async def fix_role_order(self, guild, kr):
+        top = guild.me.top_role
+        want = []
+        for gkey in sl.ROLE_ORDER:
+            gdef = next(g for g in sl.ROLE_KIT if g["key"] == gkey)
+            if gdef.get("divider") and kr.get(f"div:{gkey}"):
+                want.append(int(kr[f"div:{gkey}"]))
+            for r in gdef["roles"]:
+                rid = kr.get(f"{gkey}:{r['slug']}")
+                if rid:
+                    want.append(int(rid))
+        roles = [guild.get_role(i) for i in want]
+        roles = [r for r in roles if r is not None]
+        movable = [r for r in roles if r < top and not r.managed]
+        stuck = len(roles) - len(movable)
+        if not movable:
+            return 0, stuck
+        others = [r for r in guild.roles if r < top and not r.is_default() and r not in movable]
+        ordered = movable + sorted(others, key=lambda r: r.position, reverse=True)
+        positions = {}
+        pos = top.position - 1
+        for r in ordered:
+            if pos < 1:
+                break
+            positions[r] = pos
+            pos -= 1
+        changed = sum(1 for r, ps in positions.items() if r.position != ps and r in movable)
+        if changed:
+            try:
+                await guild.edit_role_positions(positions=positions, reason="/setup roles order")
+            except discord.HTTPException as e:
+                print(f"[setup] role reorder failed: {e}")
+                return 0, stuck
+        return changed, stuck
 
     async def _post_kit_panels(self, guild, channel, groups, kr):
         kit = read_cfg(guild.id).get("role_kit") or {}

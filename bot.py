@@ -401,7 +401,7 @@ bot = commands.Bot(
     # single-server build: register slash commands to just this guild so
     # they show up within seconds instead of the up-to-an-hour global sync.
     # falls back to a global sync if GUILD_ID isn't set yet.
-    debug_guilds=[GUILD_ID] if GUILD_ID else None,
+    auto_sync_commands=False,
     # guild-install ONLY. the original multi-server version of this bot also
     # allowed user-install (Discord's "Apps" tab -> add to your own account,
     # then use its slash commands anywhere, including servers the bot was
@@ -449,6 +449,22 @@ async def _game_channel_check(ctx):
 
 
 bot.add_check(_game_channel_check)
+
+
+async def _tier_check(ctx):
+    if isinstance(ctx, discord.ApplicationContext) or ctx.guild is None or ctx.command is None:
+        return True
+    import perms
+    name = ctx.command.name
+    if name in perms.MOD_TIERS or name in perms.CASINO_CMDS or name in perms.HOST_CMDS:
+        ok, why = perms.allowed(ctx.author, name)
+        if not ok:
+            await ctx.send(why)
+            raise GameChannelLocked()
+    return True
+
+
+bot.add_check(_tier_check)
 
 
 # ---------------- "space" abstraction: server vs. personal (DM/group chat) ----------------
@@ -683,6 +699,9 @@ def is_manager(member, guild):
     # admins are always managers, no need to set anything up for that
     if member.guild_permissions.administrator:
         return True
+    import perms
+    if perms.tier_of(member) >= perms.CASINO_TIER or perms.sides(member) & {"dealer", "host"}:
+        return True
     g = get_guild_cfg(loadCfg(), guild)
     if member.id in g["managers"]:
         return True
@@ -819,14 +838,30 @@ import hashlib
 _CMD_HASH_FILE = Path(__file__).parent / ".command_hash.json"
 
 
-def _command_hashes():
-    """{command name: fingerprint of that command's name/description/
-    options} for every currently-registered local command. Per-command on
-    purpose (not one hash for the whole set) - that's what lets on_connect
-    below tell exactly WHICH commands changed instead of just "something
-    changed"."""
+HOME_ONLY = {"mod", "casino", "admin", "owner", "setup", "report", "Report Message", "rank", "levels", "status",
+             "close-ticket", "leaderboard", "give", "rob", "bounty", "bounties", "duel", "debtors", "lottery", "buyticket"}
+
+
+def scope_commands():
+    everywhere = {discord.IntegrationType.guild_install, discord.IntegrationType.user_install}
+    ctxs = {discord.InteractionContextType.guild, discord.InteractionContextType.bot_dm,
+            discord.InteractionContextType.private_channel}
+    for c in bot.pending_application_commands:
+        if GUILD_ID and c.name in HOME_ONLY:
+            c.guild_ids = [GUILD_ID]
+            c.integration_types = None
+            c.contexts = None
+        else:
+            c.guild_ids = None
+            c.integration_types = set(everywhere)
+            c.contexts = set(ctxs)
+
+
+def _command_hashes(scope):
     hashes = {}
     for c in bot.pending_application_commands:
+        if bool(c.guild_ids) != (scope == "guild"):
+            continue
         blob = json.dumps(c.to_dict(), sort_keys=True, default=str)
         hashes[c.name] = hashlib.sha256(blob.encode()).hexdigest()
     return hashes
@@ -834,60 +869,35 @@ def _command_hashes():
 
 def _load_cached_hashes():
     if not _CMD_HASH_FILE.exists():
-        return {}
+        return {}, {}
     try:
         cached = json.loads(_CMD_HASH_FILE.read_text())
     except Exception:
-        return {}
-    # old format from before per-command hashing was {"hash": "..."} - on
-    # the first boot after upgrading this just looks like "everything is
-    # new", which is harmless: Discord treats an upsert of a name that
-    # already exists as an edit, not a create, so it doesn't cost anything
-    # from the 200/day creates budget. Every boot after that is properly
-    # incremental once the new-format file is written below.
-    return cached.get("commands", {})
+        return {}, {}
+    if "guild" in cached:
+        return cached.get("guild", {}), cached.get("global", {})
+    return cached.get("commands", {}), {}
 
 
-def _save_cached_hashes(hashes):
-    _CMD_HASH_FILE.write_text(json.dumps({"commands": hashes}))
+def _save_cached_hashes(guild_h, global_h):
+    _CMD_HASH_FILE.write_text(json.dumps({"guild": guild_h, "global": global_h}))
 
 
 async def _sync_commands_incrementally(new_hashes, old_hashes):
-    """Only touches commands that actually changed since the last
-    successful sync - added, edited, or removed - instead of bulk-
-    overwriting the entire ~80-command set every time ANYTHING changes.
-    That full-bulk-every-time behavior is what previously burned through
-    Discord's 200-guild-command-CREATES/day cap (error 30034) from just a
-    few restarts while testing.
-
-    Edits and deletes don't count against that cap at all - only genuinely
-    new command names do (a Discord-side rule, nothing this bot controls),
-    so in practice this only ever spends budget on commands that are
-    truly new, never on ones that just got tweaked or removed.
-    """
     to_create = [name for name in new_hashes if name not in old_hashes]
     to_delete = [name for name in old_hashes if name not in new_hashes]
     to_edit = [name for name in new_hashes
                if name in old_hashes and new_hashes[name] != old_hashes[name]]
-
     if not (to_create or to_delete or to_edit):
-        return  # only unrelated commands' names churned in old_hashes (e.g. a stale entry) - nothing to actually do
-
-    # one GET to map name -> Discord's command ID, needed for edits/deletes
-    # (creates don't need an existing ID to target). GET calls are free,
-    # they don't count against anything.
+        return
     remote = await bot.http.get_guild_commands(bot.application_id, GUILD_ID)
     remote_ids = {c["name"]: c["id"] for c in remote}
-    local_by_name = {c.name: c for c in bot.pending_application_commands}
-
+    local_by_name = {c.name: c for c in bot.pending_application_commands if c.guild_ids}
     for name in to_create:
         await bot.http.upsert_guild_command(bot.application_id, GUILD_ID, local_by_name[name].to_dict())
     for name in to_edit:
         remote_id = remote_ids.get(name)
         if remote_id is None:
-            # shouldn't happen (it was in old_hashes, so Discord should
-            # already know about it) but don't let one weird case take
-            # down the rest of the sync - upsert-by-name still works
             await bot.http.upsert_guild_command(bot.application_id, GUILD_ID, local_by_name[name].to_dict())
         else:
             await bot.http.edit_guild_command(bot.application_id, GUILD_ID, int(remote_id), local_by_name[name].to_dict())
@@ -895,51 +905,62 @@ async def _sync_commands_incrementally(new_hashes, old_hashes):
         remote_id = remote_ids.get(name)
         if remote_id is not None:
             await bot.http.delete_guild_command(bot.application_id, GUILD_ID, int(remote_id))
-
     untouched = len(new_hashes) - len(to_create) - len(to_edit)
-    print(f"synced commands: {len(to_create)} created, {len(to_edit)} edited, "
-          f"{len(to_delete)} deleted, {untouched} untouched")
+    print(f"server commands: {len(to_create)} created, {len(to_edit)} edited, {len(to_delete)} deleted, {untouched} untouched")
+
+
+async def _register_ids():
+    local = {c.name: c for c in bot.pending_application_commands}
+    remote = []
+    try:
+        remote += await bot.http.get_global_commands(bot.application_id)
+    except Exception as e:
+        print(f"couldn't fetch global commands: {e}")
+    if GUILD_ID:
+        try:
+            remote += await bot.http.get_guild_commands(bot.application_id, GUILD_ID)
+        except Exception as e:
+            print(f"couldn't fetch server commands: {e}")
+    n = 0
+    for r in remote:
+        c = local.get(r["name"])
+        if c is not None:
+            c.id = int(r["id"])
+            bot._application_commands[c.id] = c
+            n += 1
+    print(f"linked {n} commands")
+
+
+async def sync_everything(force=False):
+    guild_h, global_h = _command_hashes("guild"), _command_hashes("global")
+    old_guild, old_global = _load_cached_hashes()
+    if GUILD_ID and (force or guild_h != old_guild):
+        print(f"syncing server commands to {GUILD_ID}...")
+        if force:
+            await bot.http.bulk_upsert_guild_command(bot.application_id, GUILD_ID,
+                                                     [c.to_dict() for c in bot.pending_application_commands if c.guild_ids])
+        else:
+            await _sync_commands_incrementally(guild_h, old_guild)
+    if force or global_h != old_global:
+        print(f"syncing {len(global_h)} personal-app commands (can take a few minutes to show up everywhere)...")
+        await bot.http.bulk_upsert_global_commands(bot.application_id,
+                                                   [c.to_dict() for c in bot.pending_application_commands if not c.guild_ids])
+    if guild_h == old_guild and global_h == old_global and not force:
+        print(f"commands unchanged ({len(guild_h)} server / {len(global_h)} personal) - skipping sync")
+    _save_cached_hashes(guild_h, global_h)
 
 
 @bot.event
 async def on_connect():
-    # py-cord normally does this silently as part of its default on_connect
-    # handler - overriding it just to get visible startup feedback, since
-    # command syncing is the step most likely to hang/fail (Discord rate
-    # limits, bad token permissions, etc.) and "nothing printed for 30
-    # seconds" otherwise looks identical to "frozen".
-    #
-    # IMPORTANT: on_connect fires on every reconnect, not just the first
-    # startup, so this needs to be cheap and safe to run repeatedly. Skip
-    # entirely if nothing changed; otherwise sync only what did (see
-    # _sync_commands_incrementally above).
-    new_hashes = _command_hashes()
-    old_hashes = _load_cached_hashes()
-
-    if new_hashes == old_hashes:
-        print(f"commands unchanged ({len(new_hashes)}) - skipping sync")
-        return
-
-    if not bot.auto_sync_commands:
-        _save_cached_hashes(new_hashes)
-        return
-
-    if GUILD_ID:
-        print(f"command set changed - syncing only what's different, to guild {GUILD_ID}...")
+    try:
+        await sync_everything()
+    except Exception as e:
+        print(f"sync failed ({e}) - trying a full one")
         try:
-            await _sync_commands_incrementally(new_hashes, old_hashes)
-        except Exception as e:
-            print(f"incremental command sync failed ({e}) - falling back to a full sync this one time")
-            await bot.sync_commands()
-    else:
-        # no single guild to target an incremental diff at, and global
-        # commands propagate over up to an hour anyway regardless of sync
-        # method - bulk is fine here, this path is only hit if GUILD_ID
-        # isn't set, which this project's single-server design discourages.
-        print("connected - syncing commands globally (GUILD_ID not set)...")
-        await bot.sync_commands()
-
-    _save_cached_hashes(new_hashes)
+            await sync_everything(force=True)
+        except Exception as e2:
+            print(f"full sync failed too: {e2}")
+    await _register_ids()
 
 
 @bot.event
@@ -953,7 +974,8 @@ async def on_guild_join(guild):
         return
     print(f"joined {guild.name}, syncing commands")
     try:
-        await bot.sync_commands()
+        await sync_everything(force=True)
+        await _register_ids()
     except Exception as e:
         print(f"sync after join failed: {e}")
 
@@ -974,15 +996,6 @@ async def on_ready():
     # and commands seeming to randomly vanish/duplicate. safe to run every
     # startup - if there's nothing global left, this is a single harmless
     # no-op API call.
-    try:
-        existing_global = await bot.http.get_global_commands(bot.application_id)
-        if existing_global:
-            await bot.http.bulk_upsert_global_commands(bot.application_id, [])
-            print(f"cleared {len(existing_global)} stale global slash command(s) left over from "
-                  f"before this became a guild-only bot")
-    except Exception as e:
-        # never let this non-critical cleanup step take the bot down
-        print(f"couldn't check/clear global commands (non-fatal, will retry next restart): {e}")
 
     # single-server lock: bail out of anywhere that isn't the configured
     # server. covers someone accepting an invite link that got shared/leaked,
@@ -1021,7 +1034,7 @@ bot.casino = _types.SimpleNamespace(
 )
 
 for _ext in ("cogs.moderation", "cogs.tickets", "cogs.reports", "cogs.logging_events", "cogs.leveling", "cogs.welcome", "cogs.server_stats", "cogs.diagnostics", "cogs.bot_status",
-             "cogs.games_plus", "cogs.economy_plus", "cogs.server_setup"):
+             "cogs.games_plus", "cogs.economy_plus", "cogs.server_setup", "cogs.staff"):
     try:
         bot.load_extension(_ext)
         print(f"loaded {_ext}")
@@ -1031,103 +1044,67 @@ for _ext in ("cogs.moderation", "cogs.tickets", "cogs.reports", "cogs.logging_ev
 
 # ================= HELP =================
 HELP_TEXT = (
-    "**works in DMs & group chats too**\n"
-    "solo stuff (balance, daily/work/crime/beg, bank, loans, shop, business, upgrades, and every "
-    "single-player game) works anywhere - your DM balance is separate from any server's and follows "
-    "you between DMs. anything needing another real player or a server-wide view (give, rob, duel, "
-    "bounty, leaderboard, lottery, manager tools) is server-only. slash commands also work in servers "
-    "this bot was never added to, if you've installed it as an app - prefix (!) commands only work in "
-    "servers the bot is actually a member of. prefix (!) command amounts accept shorthand too - "
-    "`!deposit 15k`, `!bet 1.5m`, `!give @user 2b` all work the same as typing the full number.\n\n"
-    "**economy**\n"
-    "balance [user], daily (streak bonus up to +45%), work, crime (riskier, bigger payout), "
-    "beg (tiny, no risk), give <user> <amt>, rob <user>, "
-    "bounty <user> <amt>, bounties, leaderboard, stats [user]\n\n"
-    "**bank & debt**\n"
-    "deposit <amt>, withdraw <amt> (bank chips are safe from /rob and earn interest)\n"
-    "loan <amt> (20% interest, 24h to pay back, defaulted debt grows 5%/day), repay <amt>, debtors\n\n"
-    "**passive income & upgrades**\n"
-    "business, buybusiness <tier>, collect - own a business, income builds up hourly, claim anytime\n"
-    "upgrades, buyupgrade <name> - permanent one-time boosts (bigger /work or /crime payouts, "
-    "shorter /work or /rob cooldowns, cheaper crime/rob fines, better bank interest, cheaper loans)\n\n"
-    "**shop**\n"
-    "shop, buy <item>, pawn <item> (sell back for 50%) - shield blocks rob, charm doubles daily, "
-    "insurance blocks the next successful rob against you, lockpick guarantees your next rob, "
-    "energy_drink resets /work and /crime cooldowns, stopwatch resets /rob cooldown, "
-    "fake_id/getaway_bike dodge your next crime/rob fine, four_leaf_clover boosts your next work/crime "
-    "payout 50%, piggy_bank doubles your next daily bank interest, steel_vault blocks rob for 7 days, "
-    "lucky_dice guarantees your next crime, overtime_pass lifts the /collect cap for one claim, "
-    "night_vision reveals your rob target's balance, debt_relief cuts your loan by 25%, "
-    "platinum_shield/midas_touch unlock via /rebirth\n\n"
-    "**rebirth**\n"
-    "rebirth (up to 7 times) - once your bal+bank hits the requirement (10k the first time, then it "
-    "grows), cash it all in: everything economy-side resets to a clean slate, but you permanently keep "
-    "a growing earnings multiplier (+50% per rebirth on /work, /crime, /collect) and a growing luck "
-    "bonus (+1.05% success chance per rebirth on /crime, /rob, /beg), capped at 7 rebirths so it never "
-    "gets out of hand. also unlocks higher business tiers and rarer shop/upgrade items the more times "
-    "you've done it. badges carry over, everything else doesn't\n\n"
-    "**games**\n"
-    "coinflip <amt> <heads/tails>, slots <amt> (feeds a growing jackpot), jackpot, dice <amt> <1-6>, "
-    "roulette <amt> <red/black/green/number>, blackjack <amt> (Hit/Stand/Double Down), allin <red/black>, "
-    "war <amt>, hilo <amt>, crash <amt> <target multiplier>, mines <amt> [mine count], plinko <amt>, "
-    "horserace <amt> <horse>, scratch, duel <user> <amt>, wheel <amt>, keno <amt> <numbers>, "
-    "baccarat <amt> <player/banker/tie>, rps <amt> <rock/paper/scissors>, ladder <amt> <rungs 1-6>\n\n"
-    "**more games** (slash: `/play <game>`, prefix: `!<game>`) - `/games` shows them all by type\n"
-    "cups <amt> <1-3>, dragontiger <amt> <dragon/tiger/tie>, sicbo <amt> <big/small/odd/even/triple>, "
-    "sevens <amt> <under/over/seven>, revolver <amt> <bullets 1-5>, chests <amt> <1-5>, diceduel <amt>, "
-    "cardguess <amt> <red/black/suit/rank>, target <amt> <2-95>, towers <amt> [easy/medium/hard], "
-    "balloon <amt>, videopoker <amt>, rocket <amt> [auto cash-out], tictactoe <user> <amt>, heist <entry>\n\n"
-    "**more ways to earn**\n"
-    "`/claim weekly|monthly|spin` (!weekly, !monthly, !spin), `/gather fish|mine|hunt|collection` "
-    "(!fish, !mine, !hunt, !collection), quests (3 daily quests), trivia, profile [user], "
-    "giveaway <prize> <minutes> [winners] (managers)\n\n"
-    "**server builder** (admins)\n"
-    "`/setup build [style] [games] [skip]` makes every category, channel, role and panel with emoji dividers, "
-    "`/setup restyle <style>` renames them all, `/setup preview <style>` - or use the dashboard's Server Builder tab\n\n"
-    "**lottery**\n"
-    "lottery (see pot/tickets), buyticket <count> - daily drawing, one winner takes the whole pot\n\n"
-    "**casino manager stuff** (admins + whoever's set as manager)\n"
-    "addchips <user> <amt>, removechips <user> <amt>, banuser <user>, unbanuser <user>, resetuser [user], "
-    "forgive <user>, setprefix <prefix>, setannounce <channel>\n\n"
-    "**server owner only**\n"
-    "setmanager (pick users/roles or auto-create a 'Casino Staff' role), !testmode (prefix-only, your own bets always win, "
-    "everyone else's games stay normal random, and every toggle is logged)\n\n"
-    "**moderation** (staff role, set in the dashboard, or admins)\n"
-    "kick <member> [reason], ban <user> [reason] [delete_days], unban <user id>, "
-    "mute <member> <duration> [reason] (timeout, max 28d), unmute <member>, "
-    "warn <member> <reason>, warnings <member>, clearwarnings <member> (manage server), "
-    "purge <amount> [member] (bulk-delete, max 100), slowmode <duration|off> (max 6h), "
-    "lock [reason] / unlock (this channel)\n"
-    "**durations** everywhere above accept a bare number (default unit varies by command), short units "
-    "(10s, 5m, 2h, 3d, 1w, 2mo, 1y), full words (10 seconds, 5 minutes, 2 hours, 3 days, 1 week, 2 months, "
-    "1 year), or combos like 1h30m / '1 week 2 days'\n\n"
-    "**tickets & reports**\n"
-    "ticket-panel (staff - posts the 'open a ticket' panel in this channel), close-ticket (run inside an open "
-    "ticket), add-to-ticket <user> (staff), report <member> <reason> (sends straight to the staff report log)\n\n"
-    "**leveling**\n"
-    "rank [user] - your level, xp progress, and rank; levels - top 10 leaderboard in this server; "
-    "level test (staff) - sends a preview level-up embed for yourself, using the real channel/template. earned "
-    "automatically by chatting (small cooldown between xp gains so spamming doesn't help). level-up "
-    "announcements, the channel it posts in, the message, and which roles unlock at which level are all set "
-    "in the dashboard's Leveling & Welcome tab\n\n"
-    "**welcome messages**\n"
-    "posted automatically when someone joins - channel and message template are set in the dashboard's "
-    "Leveling & Welcome tab. welcome test (staff) - sends a preview welcome embed for yourself, using the "
-    "real channel/template\n\n"
-    "**member count**\n"
-    "a voice channel can auto-rename itself to show the live non-bot member count (e.g. 'Members: 42') - "
-    "toggle, channel, and name template are in the dashboard's Leveling & Welcome tab. updates on join/leave "
-    "(rate-limit permitting) and every 10 minutes regardless\n\n"
-    "**diagnostics** (staff)\n"
-    "diag / diagnostics / healthcheck - checks welcome/leveling/member-count/logging/tickets/staff-role "
-    "config, storage connectivity, and cog load status all at once, and auto-fills a missing welcome/level/"
-    "member-count channel by name match if it finds an obvious one\n\n"
+    "**money**\n"
+    "`balance [user]` · `daily` (streak bonus, up to +45%) · `work` · `crime` (riskier, pays more) · `beg` · "
+    "`stats [user]` · `profile [user]` · `achievements` · `hide` (hides your bank from !bal)\n\n"
+    "**bank & loans**\n"
+    "`deposit <amt>` / `withdraw <amt>` - bank chips can't be robbed and earn a bit of interest\n"
+    "`loan <amt>` (20% interest, 24h) · `repay <amt>` · `invest <amt> <days>` - if a loan goes overdue the house "
+    "takes what you have and the rest grows 5% a day\n\n"
+    "**free chips**\n"
+    "`/claim weekly` · `/claim monthly` · `/claim spin` (daily wheel) · `quests` (3 a day) · `trivia` · "
+    "`/gather fish|mine|hunt` (10 min cooldown, loot sells instantly) · `/gather collection`\n\n"
     "**your data**\n"
-    "deletemydata - permanently wipes your own casino account and warning history here, no staff needed\n\n"
-    "**per-game channels**\n"
-    "each casino game listed above under 'games' can be locked to one channel per server - auto-detected by "
-    "matching a channel's name (e.g. #slots), or set explicitly from the dashboard's Game Channels tab, which "
-    "also has a Custom Env box for per-server overrides. ask a manager/admin if a game says to play it elsewhere"
+    "`deletemydata` wipes your account and warnings for good, no staff needed\n\n"
+    "**classic games**\n"
+    "`coinflip <amt> <heads/tails>` · `slots <amt>` · `jackpot` · `dice <amt> <1-6>` · `roulette <amt> <red/black/green/0-36>` · "
+    "`allin <red/black>` · `blackjack <amt>` · `war <amt>` · `hilo <amt>` · `crash <amt> <x>` · `mines <amt> [mines]` · "
+    "`plinko <amt>` · `horserace <amt> <horse>` · `scratch` · `wheel <amt>` · `keno <amt> <numbers>` · "
+    "`baccarat <amt> <player/banker/tie>` · `rps <amt> <pick>` · `ladder <amt> <1-6>`\n\n"
+    "**/play games** (or just `!<game>`)\n"
+    "cups · dragontiger · sicbo · sevens · revolver · chests · diceduel · cardguess · target · craps · threecard · "
+    "bingo · towers · balloon · videopoker · rocket · penalty · doors - `/games` shows what each pays\n"
+    "amounts take `250`, `15k`, `1.5m` or `all`. some games only work in their own channel, the bot tells you where\n\n"
+    "**multiplayer** (main server only)\n"
+    "`duel <user> <amt>` · `/play tictactoe` · `/play connect4` · `/play heist` · `lottery` · `buyticket <n>`\n\n"
+    "**shop**\n"
+    "`shop` · `buy <item>` · `use <item>` · `pawn <item>` (half back) · `inventory` · `craft vault`\n\n"
+    "**business & upgrades**\n"
+    "`business` · `buybusiness <tier>` · `collect` - income builds up by the hour\n"
+    "`upgrades` · `buyupgrade <name>` - permanent boosts\n\n"
+    "**rebirth**\n"
+    "`rebirth` - once you're rich enough, reset for a permanent earnings + luck boost (7 max). badges stay\n\n"
+    "**social** (main server only)\n"
+    "`give <user> <amt>` · `rob <user>` · `bounty <user> <amt>` · `bounties` · `leaderboard` · `debtors`\n\n"
+    "**levels**\n"
+    "`rank [user]` · `levels` - you level up by chatting. rank roles unlock automatically\n\n"
+    "**tickets & reports**\n"
+    "open a ticket from the ticket panel · `close-ticket` inside it · `report <member> <reason>` or right click a "
+    "message → Apps → Report Message\n\n"
+    "**roles**\n"
+    "grab colors, pings, pronouns and platforms from the buttons in the roles channel\n\n"
+    "**security · trial+** (`/mod`)\n"
+    "`warn` · `warnings` · `mute` · `unmute` · `purge` · `ticket-add` · `ranks`\n"
+    "mutes max 1h and purges max 25 until security\n\n"
+    "**security · junior+**\n"
+    "`slowmode`\n\n"
+    "**security · security+**\n"
+    "`kick` · `lock` · `unlock` - mutes up to 1d (senior 7d, head 28d)\n\n"
+    "**security · senior+**\n"
+    "`clearwarnings`\n\n"
+    "**security · head+**\n"
+    "`ban` · `unban`\n\n"
+    "**casino staff** (`/casino` - dealers + floor managers)\n"
+    "`addchips` · `removechips` · `setbalance` · `forgive` · `ban` / `unban` (from games) · `reset` · `giveaway` (hosts too)\n\n"
+    "**admin** (`/admin` - floor managers+)\n"
+    "`role give/take` (pit boss+ for staff ranks) · `ticket-panel` · `announce-channel` · `diag` · `test-welcome` · "
+    "`test-levelup` · `prefix` (pit boss+)\n\n"
+    "**owner** (`/owner` + `/setup` - the server owner only)\n"
+    "`/setup build` · `/setup roles` · `/setup restyle` · `/setup preview` · `/setup undo` · `/owner managers` · "
+    "`/owner testmode` · `/owner wipe-economy`\n\n"
+    "**rules for staff**\n"
+    "you can't act on anyone ranked the same as you or higher. 😴 On Break turns your staff commands off till you take it off. "
+    "durations take `10m`, `2h`, `3d`, `1w` or combos like `1h30m`"
 )
 
 
@@ -1164,12 +1141,14 @@ def build_help_embeds():
 
 
 HELP_CATS = [
-    ("home", "🏠", "Home", []),
-    ("econ", "💰", "Economy", ["economy", "bank & debt", "more ways to earn", "your data"]),
-    ("games", "🎲", "Games", ["games", "more games", "lottery", "per-game channels"]),
-    ("shop", "🛒", "Shop & Biz", ["shop", "passive income", "rebirth"]),
-    ("server", "⚙️", "Server", ["server builder", "tickets & reports", "leveling", "welcome messages", "member count"]),
-    ("staff", "🛡️", "Staff", ["casino manager", "server owner", "moderation", "durations", "diagnostics"]),
+    ("home", "🏠", "Home", [], "all"),
+    ("econ", "💰", "Economy", ["money", "bank & loans", "free chips", "your data"], "all"),
+    ("games", "🎲", "Games", ["classic games", "/play games", "multiplayer"], "all"),
+    ("shop", "🛒", "Shop & Biz", ["shop", "business & upgrades", "rebirth"], "all"),
+    ("server", "🏡", "Server", ["social", "levels", "tickets & reports", "roles"], "server"),
+    ("security", "🛡️", "Security", ["security"], "mod"),
+    ("staff", "🎰", "Casino & Admin", ["casino staff", "admin", "rules for staff"], "staff"),
+    ("owner", "👑", "Owner", ["owner"], "owner"),
 ]
 
 
@@ -1182,49 +1161,60 @@ def help_sections():
     return out
 
 
-def help_page(key, prefix="!"):
-    secs = help_sections()
-    emoji, label, wanted = next((e, l, w) for k, e, l, w in HELP_CATS if k == key)
+def help_cats_for(member, guild):
+    import perms
+    t = perms.tier_of(member) if guild is not None else 0
+    sd = perms.sides(member) if guild is not None else set()
+    ok = {"all": True, "server": guild is not None, "mod": guild is not None and t >= 1,
+          "staff": guild is not None and (t >= 1 or bool(sd)), "owner": guild is not None and t >= 9}
+    return [c for c in HELP_CATS if ok[c[4]]]
+
+
+def help_page(key, prefix="!", cats=None, in_dm=False):
+    cats = cats or HELP_CATS
+    _, emoji, label, wanted, _ = next(c for c in HELP_CATS if c[0] == key)
     e = discord.Embed(title=f"{emoji} {label}", color=0xFF6AD5)
     if key == "home":
-        e.description = ("pick a category below 👇\n\n"
-                         f"prefix here is `{prefix}` · slash commands work too\n"
-                         "amounts take `250`, `15k`, `1.5m` or `all`\n\n"
-                         "new here? try `/daily`, `/claim spin` and `/quests` for free chips")
-        e.add_field(name="categories", value="\n".join(f"{em} **{lb}**" for k, em, lb, _ in HELP_CATS if k != "home"))
-    parts = []
-    for title, body in secs:
-        if any(title.lower().startswith(w) for w in wanted):
-            body = body.strip("\n")
-            first, _, rest = body.partition("\n")
-            head = f"**{title}**" + (f" {first.strip()}" if first.strip() else "")
-            parts.append(head + ("\n" + rest if rest else ""))
-    text = "\n\n".join(parts)
-    if key != "home":
-        e.description = text[:4000]
+        e.description = ("pick a page below 👇\n\n"
+                         + (f"prefix here is `{prefix}` · slash works too\n" if not in_dm else
+                            "you're on the personal app - your wallet here is separate from the main server's, "
+                            "and server stuff (social, levels, staff) only works in the main server\n")
+                         + "amounts take `250`, `15k`, `1.5m` or `all`\n\n"
+                         "new? grab `/daily`, `/claim spin` and `/quests` for free chips")
+        e.add_field(name="pages", value="\n".join(f"{c[1]} **{c[2]}**" for c in cats if c[0] != "home"))
+    else:
+        parts = []
+        for title, body in help_sections():
+            if any(title.lower().startswith(w) for w in wanted):
+                body = body.strip("\n")
+                first, _, rest = body.partition("\n")
+                head = f"**{title}**" + (f" {first.strip()}" if first.strip() else "")
+                parts.append(head + ("\n" + rest if rest else ""))
+        e.description = "\n\n".join(parts)[:4000]
     e.set_footer(text="buttons work for 3 min")
     return e
 
 
 class HelpView(discord.ui.View):
-    def __init__(self, author_id, prefix="!", current="home"):
+    def __init__(self, author_id, prefix="!", cats=None, in_dm=False, current="home"):
         super().__init__(timeout=180)
-        self.author_id = author_id
-        self.prefix = prefix
+        self.author_id, self.prefix, self.in_dm = author_id, prefix, in_dm
+        self.cats = cats or HELP_CATS
         self.message = None
-        for i, (k, emoji, label, _) in enumerate(HELP_CATS):
-            b = discord.ui.Button(label=label, emoji=emoji, row=i // 3,
-                                  style=discord.ButtonStyle.primary if k == current else discord.ButtonStyle.secondary)
-            b.callback = self.go(k)
+        for i, c in enumerate(self.cats):
+            b = discord.ui.Button(label=c[2], emoji=c[1], row=i // 4,
+                                  style=discord.ButtonStyle.primary if c[0] == current else discord.ButtonStyle.secondary)
+            b.callback = self.go(c[0], b)
             self.add_item(b)
 
-    def go(self, key):
+    def go(self, key, button):
         async def cb(interaction):
+            page = help_page(key, self.prefix, self.cats, self.in_dm)
             if interaction.user.id != self.author_id:
-                return await interaction.response.send_message(embed=help_page(key, self.prefix), ephemeral=True)
+                return await interaction.response.send_message(embed=page, ephemeral=True)
             for item in self.children:
-                item.style = discord.ButtonStyle.primary if item.label == next(l for k, _, l, _ in HELP_CATS if k == key) else discord.ButtonStyle.secondary
-            await interaction.response.edit_message(embed=help_page(key, self.prefix), view=self)
+                item.style = discord.ButtonStyle.primary if item is button else discord.ButtonStyle.secondary
+            await interaction.response.edit_message(embed=page, view=self)
         return cb
 
     async def on_timeout(self):
@@ -1239,7 +1229,9 @@ class HelpView(discord.ui.View):
 
 async def send_help(ctx):
     prefix = get_guild_cfg(loadCfg(), ctx.guild).get("prefix", "!") if ctx.guild else "!"
-    await reply(ctx, embed=help_page("home", prefix), view=HelpView(ctx.author.id, prefix))
+    cats = help_cats_for(ctx.author, ctx.guild)
+    in_dm = ctx.guild is None
+    await reply(ctx, embed=help_page("home", prefix, cats, in_dm), view=HelpView(ctx.author.id, prefix, cats, in_dm))
 
 
 @bot.slash_command(name="help", description="list of everything this bot can do")
@@ -4430,6 +4422,10 @@ async def do_reset_all(ctx):
     if not need_guild(ctx):
         await reply(ctx, content="this is a server-only feature", ephemeral=True)
         return
+    import perms
+    if perms.tier_of(ctx.author) < 9:
+        await reply(ctx, content="only the server owner can wipe everyone", ephemeral=True)
+        return
     if not is_manager(ctx.author, ctx.guild):
         await reply(ctx, content="managers only", ephemeral=True)
         return
@@ -4584,7 +4580,7 @@ async def on_application_command_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
         await ctx.respond("admin only, nice try", ephemeral=True)
         return
-    if isinstance(error, GameChannelLocked):
+    if isinstance(error, GameChannelLocked) or type(error).__name__ == "Denied":
         return  # already told them which channel to use - nothing more to say
     if isinstance(error, commands.CommandOnCooldown):
         await ctx.respond(f"slow down - try that again in {round(error.retry_after)}s", ephemeral=True)
@@ -4607,7 +4603,7 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.MissingPermissions):
         await ctx.send("admin only, nice try")
         return
-    if isinstance(error, GameChannelLocked):
+    if isinstance(error, GameChannelLocked) or type(error).__name__ == "Denied":
         return  # already told them which channel to use - nothing more to say
     if isinstance(error, commands.CommandNotFound):
         await ctx.send("that command doesn't exist - try `!help` to see what I can actually do")
@@ -4629,6 +4625,15 @@ async def on_command_error(ctx, error):
         return
     traceback.print_exception(type(error), error, error.__traceback__)
     await ctx.send("something went wrong on my end - try again in a bit, and let staff know if it keeps happening")
+
+
+bot.casino.__dict__.update(
+    do_addchips=do_addchips, do_removechips=do_removechips, do_setbalance=do_setbalance, do_forgive=do_forgive,
+    do_ban=do_ban, do_reset=do_reset, do_reset_all=do_reset_all, do_setannounce=do_setannounce,
+    do_setprefix=do_setprefix, do_testmode=do_testmode, ManagerPicker=ManagerPicker)
+from cogs.staff import strip_moved
+strip_moved(bot)
+scope_commands()
 
 
 if __name__ == "__main__":

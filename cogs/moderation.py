@@ -35,6 +35,7 @@ from discord import Option
 import logging_utils
 import embeds
 import cog_utils as cu
+import perms
 import store
 
 WARNINGS_FILE = Path(__file__).parent.parent / "warnings.json"
@@ -54,22 +55,20 @@ def staff_check():
     async def predicate(ctx):
         if not isinstance(ctx.author, discord.Member):
             return False
-        if logging_utils.is_staff(ctx.author):
+        ok, why = perms.allowed(ctx.author, ctx.command.name if ctx.command else "", 6)
+        if ok:
             return True
-        raise commands.MissingPermissions(["manage_guild"])
+        await cu.respond(ctx, why, ephemeral=True)
+        raise perms.Denied()
     return commands.check(predicate)
 
 
+class perms_denied(commands.CheckFailure):
+    pass
+
+
 def _hierarchy_ok(ctx, member):
-    """The guild owner can act on anyone; everyone else can only act on
-    someone with a strictly LOWER top role than their own - equal-or-
-    higher is blocked even between two staff/admins, matching how
-    Discord's own kick/ban/timeout UI already behaves. Comparing top
-    roles this way also naturally blocks acting on yourself (your own
-    top role is never lower than your own top role)."""
-    if ctx.author.id == ctx.guild.owner_id:
-        return True
-    return member.top_role < ctx.author.top_role
+    return perms.outranks(ctx.author, member)
 
 
 class Moderation(commands.Cog):
@@ -98,7 +97,7 @@ class Moderation(commands.Cog):
         blocked - caller just needs to `return` in that case."""
         if _hierarchy_ok(ctx, member):
             return True
-        await cu.respond(ctx, f"can't {action} someone with an equal/higher role than you", ephemeral=True)
+        await cu.respond(ctx, f"can't {action} someone ranked the same or above you", ephemeral=True)
         return False
 
     # ---------------------------------------------------------------- kick --
@@ -150,14 +149,14 @@ class Moderation(commands.Cog):
         await cu.respond(ctx, f"🔨 banned **{target_display}**" + (f" — {reason}" if reason else ""))
 
     @commands.slash_command(name="ban", description="ban a member (or a raw user ID) from the server")
-    @commands.has_permissions(ban_members=True)
+    @staff_check()
     async def ban(self, ctx, user: Option(str, "member mention, username, or raw user ID"),
                   reason: Option(str, "why", required=False) = None,
                   delete_days: Option(int, "days of message history to delete", min_value=0, max_value=7, required=False) = 0):
         await self._do_ban(ctx, user, reason, delete_days)
 
     @commands.command(name="ban")
-    @commands.has_permissions(ban_members=True)
+    @staff_check()
     async def ban_cmd(self, ctx, user: str, *, reason: str = None):
         await self._do_ban(ctx, user, reason, delete_days=0)
 
@@ -175,12 +174,12 @@ class Moderation(commands.Cog):
         await cu.respond(ctx, f"✅ unbanned **{user}**")
 
     @commands.slash_command(name="unban", description="lift a ban by user ID")
-    @commands.has_permissions(ban_members=True)
+    @staff_check()
     async def unban(self, ctx, user_id: Option(str, "the banned user's ID")):
         await self._do_unban(ctx, user_id)
 
     @commands.command(name="unban")
-    @commands.has_permissions(ban_members=True)
+    @staff_check()
     async def unban_cmd(self, ctx, user_id: str):
         await self._do_unban(ctx, user_id)
 
@@ -188,6 +187,9 @@ class Moderation(commands.Cog):
     async def _do_mute(self, ctx, member, seconds, reason):
         if not await self._require_hierarchy(ctx, member, "mute"):
             return
+        cap = perms.mute_cap(ctx.author)
+        if seconds > cap:
+            return await cu.respond(ctx, f"your rank can mute for {cu.format_duration(cap)} max", ephemeral=True)
         until = discord.utils.utcnow() + timedelta(seconds=seconds)
         await member.timeout(until, reason=f"{ctx.author} ({ctx.author.id}): {reason or 'no reason'}")
         human = cu.format_duration(seconds)
@@ -294,12 +296,12 @@ class Moderation(commands.Cog):
         await cu.respond(ctx, f"🧹 cleared warnings for **{member}**" if had_any else f"**{member}** had no warnings")
 
     @commands.slash_command(name="clearwarnings", description="wipe a member's warning history")
-    @commands.has_permissions(manage_guild=True)
+    @staff_check()
     async def clearwarnings(self, ctx, member: Option(discord.Member, "who")):
         await self._do_clearwarnings(ctx, member)
 
     @commands.command(name="clearwarnings")
-    @commands.has_permissions(manage_guild=True)
+    @staff_check()
     async def clearwarnings_cmd(self, ctx, member: discord.Member):
         await self._do_clearwarnings(ctx, member)
 
@@ -307,6 +309,8 @@ class Moderation(commands.Cog):
     async def _do_purge(self, ctx, amount, member):
         if member is not None and not await self._require_hierarchy(ctx, member, "purge messages from"):
             return
+        if amount > perms.purge_cap(ctx.author):
+            return await cu.respond(ctx, f"your rank can purge {perms.purge_cap(ctx.author)} messages at a time", ephemeral=True)
         await cu.maybe_defer(ctx, ephemeral=True)
         # pycord's own purge() calls check(message) unconditionally - it
         # doesn't special-case check=None like you'd expect, so passing

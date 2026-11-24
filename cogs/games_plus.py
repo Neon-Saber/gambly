@@ -14,6 +14,8 @@ ck.GAME_TITLES.update({
     'revolver': '🔫 Revolver', 'chests': '🧰 Treasure Chests', 'diceduel': '🎲 Dice Duel',
     "cardguess": "🃏 Card Guess", "target": "🎯 Target", "towers": "🗼 Towers", "balloon": "🎈 Balloon",
     'videopoker': '🂡 Video Poker', 'rocket': '🚀 Rocket', 'tictactoe': '❌⭕ Tic-Tac-Toe', 'heist': '💰 Heist',
+    'craps': '🎲 Craps', 'threecard': '🃏 Three Card Poker', 'bingo': '🅱️ Bingo', 'penalty': '⚽ Penalty',
+    'doors': '🚪 Doors', 'connect4': '🔴🟡 Connect 4',
 })
 
 DIE = {1: '⚀', 2: '⚁', 3: '⚂', 4: '⚃', 5: '⚄', 6: '⚅'}
@@ -649,6 +651,316 @@ class HeistLobby(discord.ui.View):
                 pass
 
 
+def roll_craps(amount, side):
+    rolls = []
+    def r():
+        a, b = random.randint(1, 6), random.randint(1, 6)
+        rolls.append(f"{DIE[a]}{DIE[b]} {a + b}")
+        return a + b
+    first = r()
+    if first in (7, 11):
+        res = "pass"
+    elif first in (2, 3, 12):
+        res = "bar12" if first == 12 else "dont"
+    else:
+        point = first
+        while True:
+            x = r()
+            if x == point:
+                res = "pass"
+                break
+            if x == 7:
+                res = "dont"
+                break
+    text = "rolls: " + " → ".join(rolls[:12]) + (" …" if len(rolls) > 12 else "")
+    if side == "pass":
+        return (amount * 2 if res == "pass" else 0), text + f"\n{'pass line wins' if res == 'pass' else 'seven out / craps'}"
+    if res == "bar12":
+        return amount, text + "\n12 on the come out - don't pass pushes"
+    return (amount * 2 if res == "dont" else 0), text + f"\n{'don’t pass wins' if res == 'dont' else 'shooter made it'}"
+
+
+def tc_rank(hand):
+    ranks = sorted((14 if r == 1 else r) for r, _ in hand)
+    flush = len({s for _, s in hand}) == 1
+    straight = ranks[2] - ranks[0] == 2 and len(set(ranks)) == 3 or ranks == [2, 3, 14]
+    trips = len(set(ranks)) == 1
+    pair = len(set(ranks)) == 2
+    hi = sorted(ranks, reverse=True) if ranks != [2, 3, 14] else [3, 2, 1]
+    if straight and flush:
+        return (5, hi), "straight flush"
+    if trips:
+        return (4, hi), "three of a kind"
+    if straight:
+        return (3, hi), "straight"
+    if flush:
+        return (2, hi), "flush"
+    if pair:
+        p = max(set(ranks), key=ranks.count)
+        return (1, [p] + [x for x in hi if x != p]), "pair"
+    return (0, hi), "high card"
+
+
+TC_BONUS = {"straight flush": 6, "three of a kind": 5, "straight": 2.6}
+
+
+def roll_threecard(amount):
+    deck = new_deck()
+    you, dealer = [deck.pop() for _ in range(3)], [deck.pop() for _ in range(3)]
+    (ys, yn), (ds, dn) = tc_rank(you), tc_rank(dealer)
+    text = f"you {' '.join(card_str(c) for c in you)} ({yn})\ndealer {' '.join(card_str(c) for c in dealer)} ({dn})"
+    if ys > ds:
+        return amount * TC_BONUS.get(yn, 1.86), text + ("\n**bonus hand!**" if yn in TC_BONUS else "")
+    if ys == ds:
+        return amount, text + "\ntie - push"
+    return 0, text
+
+
+BINGO_DRAWS = 30
+BINGO_PAY = {0: 0, 1: 5.2, 2: 20, 3: 60, 4: 200}
+
+
+def roll_bingo(amount):
+    card = [random.sample(range(c * 15 + 1, c * 15 + 16), 5) for c in range(5)]
+    drawn = set(random.sample(range(1, 76), BINGO_DRAWS))
+    hit = [[(card[c][r] in drawn) or (c == 2 and r == 2) for r in range(5)] for c in range(5)]
+    lines = sum(all(hit[c][r] for c in range(5)) for r in range(5)) + sum(all(hit[c]) for c in range(5))
+    lines += all(hit[i][i] for i in range(5)) + all(hit[i][4 - i] for i in range(5))
+    rows = []
+    for r in range(5):
+        cells = []
+        for c in range(5):
+            if c == 2 and r == 2:
+                cells.append(" ★ ")
+            else:
+                n = card[c][r]
+                cells.append(f"[{n:>2}]" if n in drawn else f" {n:>2} ")
+        rows.append("".join(cells))
+    text = "```\n  B   I   N   G   O\n" + "\n".join(rows) + f"\n```{BINGO_DRAWS} balls drawn · **{lines}** line{'s' if lines != 1 else ''}"
+    return amount * BINGO_PAY.get(min(lines, 4), 200), text
+
+
+class PenaltyView(discord.ui.View):
+    def __init__(self, kit, space, member, amount):
+        super().__init__(timeout=30)
+        self.kit, self.space, self.member, self.amount = kit, space, member, amount
+        self.done = False
+        self.message = None
+        self.interaction_check = owner_only_view_check(member.id)
+        for side, emo in (("left", "⬅️"), ("middle", "⬆️"), ("right", "➡️")):
+            b = discord.ui.Button(label=side, emoji=emo, style=discord.ButtonStyle.primary)
+            b.callback = self._shoot(side)
+            self.add_item(b)
+
+    def render(self, footer=""):
+        e = discord.Embed(title="⚽ Penalty", color=0x51CF66,
+                          description="pick a corner. keeper guesses wrong → **1.44x**\n\n🥅\n🧤\n\n⚽" + (f"\n\n{footer}" if footer else ""))
+        e.set_footer(text=f"bet {self.amount:,}")
+        return e
+
+    def _shoot(self, side):
+        async def cb(interaction):
+            if self.done:
+                return await interaction.response.defer()
+            self.done = True
+            dive = random.choice(["left", "middle", "right"])
+            if self.kit.c.pop_rig(self.space, self.member) == "win" and dive == side:
+                dive = next(x for x in ("left", "middle", "right") if x != side)
+            goal = dive != side
+            net, bal = await self.kit.payout(self.space, self.member, self.amount, int(self.amount * 1.44) if goal else 0, "penalty")
+            txt = (f"you went **{side}**, keeper dived **{dive}** - " +
+                   (f"⚽ GOAL! +{self.kit.chips(net)}" if goal else "🧤 saved. unlucky") + f" · wallet {self.kit.chips(bal)}")
+            await interaction.response.edit_message(embed=self.render(txt), view=None)
+        return cb
+
+    async def on_timeout(self):
+        if not self.done:
+            self.done = True
+            await self.kit.payout(self.space, self.member, self.amount, self.amount)
+            if self.message:
+                try:
+                    await self.message.edit(embed=self.render("ran out of time - bet refunded"), view=None)
+                except discord.HTTPException:
+                    pass
+
+
+class DoorsView(discord.ui.View):
+    def __init__(self, kit, space, member, amount):
+        super().__init__(timeout=45)
+        self.kit, self.space, self.member, self.amount = kit, space, member, amount
+        self.prize = random.randint(1, 3)
+        self.pick = None
+        self.opened = None
+        self.done = False
+        self.message = None
+        self.interaction_check = owner_only_view_check(member.id)
+        self._doors()
+
+    def _doors(self):
+        self.clear_items()
+        for d in (1, 2, 3):
+            b = discord.ui.Button(label=f"door {d}", emoji="🚪", style=discord.ButtonStyle.secondary)
+            b.callback = self._choose(d)
+            self.add_item(b)
+
+    def render(self, footer=""):
+        row = []
+        for d in (1, 2, 3):
+            if self.done:
+                row.append("💰" if d == self.prize else "🐐")
+            elif d == self.opened:
+                row.append("🐐")
+            elif d == self.pick:
+                row.append("👉🚪")
+            else:
+                row.append("🚪")
+        e = discord.Embed(title="🚪 Doors", color=0xFFA94D,
+                          description="one door has the money. find it → **1.44x**\n\n" + "   ".join(row) + (f"\n\n{footer}" if footer else ""))
+        e.set_footer(text=f"bet {self.amount:,}")
+        return e
+
+    def _choose(self, d):
+        async def cb(interaction):
+            if self.done or self.pick:
+                return await interaction.response.defer()
+            self.pick = d
+            if self.kit.c.pop_rig(self.space, self.member) == "win":
+                self.prize = d
+            self.opened = random.choice([x for x in (1, 2, 3) if x not in (d, self.prize)])
+            self.clear_items()
+            stay = discord.ui.Button(label=f"stay on {d}", style=discord.ButtonStyle.secondary)
+            other = next(x for x in (1, 2, 3) if x not in (d, self.opened))
+            swap = discord.ui.Button(label=f"switch to {other}", style=discord.ButtonStyle.success)
+            stay.callback = self._final(d)
+            swap.callback = self._final(other)
+            self.add_item(stay)
+            self.add_item(swap)
+            await interaction.response.edit_message(embed=self.render(f"door {self.opened} is a goat 🐐. stay or switch?"), view=self)
+        return cb
+
+    def _final(self, d):
+        async def cb(interaction):
+            if self.done:
+                return await interaction.response.defer()
+            self.done = True
+            won = d == self.prize
+            net, bal = await self.kit.payout(self.space, self.member, self.amount, int(self.amount * 1.44) if won else 0, "doors")
+            await interaction.response.edit_message(
+                embed=self.render((f"door {d} - 💰 +{self.kit.chips(net)}" if won else f"door {d} - goat 🐐") + f" · wallet {self.kit.chips(bal)}"),
+                view=None)
+        return cb
+
+    async def on_timeout(self):
+        if not self.done:
+            self.done = True
+            await self.kit.payout(self.space, self.member, self.amount, self.amount)
+            if self.message:
+                try:
+                    await self.message.edit(embed=self.render("timed out - bet refunded"), view=None)
+                except discord.HTTPException:
+                    pass
+
+
+C4_W, C4_H = 7, 6
+
+
+class C4Challenge(TTTChallenge):
+    @discord.ui.button(label="accept", emoji="✅", style=discord.ButtonStyle.success)
+    async def accept(self, button, interaction):
+        if interaction.user.id != self.p2.id:
+            return await interaction.response.send_message("this challenge isn't for you", ephemeral=True)
+        if self.answered:
+            return await interaction.response.defer()
+        self.answered = True
+        kit = self.cog.kit
+        if not await self.cog.try_deduct(self.space, self.p1, self.amount):
+            return await interaction.response.edit_message(content=f"{self.p1.mention} can't cover the bet anymore", view=None)
+        if not await self.cog.try_deduct(self.space, self.p2, self.amount):
+            await kit.credit(self.space, self.p1, self.amount)
+            return await interaction.response.edit_message(content=f"{self.p2.mention} can't cover the bet", view=None)
+        game = C4Game(kit, self.space, self.p1, self.p2, self.amount)
+        await interaction.response.edit_message(content=game.header(), view=game)
+        game.message = self.message
+        self.stop()
+
+
+class C4Game(discord.ui.View):
+    def __init__(self, kit, space, p1, p2, amount):
+        super().__init__(timeout=240)
+        self.kit, self.space, self.p1, self.p2, self.amount = kit, space, p1, p2, amount
+        self.grid = [[0] * C4_W for _ in range(C4_H)]
+        self.turn = random.choice([p1, p2])
+        self.done = False
+        self.lock = asyncio.Lock()
+        self.message = None
+        for c in range(C4_W):
+            b = discord.ui.Button(label=str(c + 1), style=discord.ButtonStyle.secondary, row=0 if c < 4 else 1)
+            b.callback = self._drop(c)
+            self.add_item(b)
+
+    def piece(self, m):
+        return 1 if m.id == self.p1.id else 2
+
+    def header(self, extra=""):
+        board = "\n".join("".join("⚫🔴🟡"[v] for v in row) for row in self.grid) + "\n1️⃣2️⃣3️⃣4️⃣5️⃣6️⃣7️⃣"
+        return (f"**connect 4** · {self.p1.mention} 🔴 vs 🟡 {self.p2.mention} · pot {self.kit.chips(self.amount * 2)}\n{board}\n"
+                + (extra or f"{self.turn.mention}'s turn ({'🔴' if self.piece(self.turn) == 1 else '🟡'})"))
+
+    def won(self, v):
+        g = self.grid
+        for r in range(C4_H):
+            for c in range(C4_W):
+                if g[r][c] != v:
+                    continue
+                for dr, dc in ((0, 1), (1, 0), (1, 1), (1, -1)):
+                    if all(0 <= r + dr * k < C4_H and 0 <= c + dc * k < C4_W and g[r + dr * k][c + dc * k] == v for k in range(4)):
+                        return True
+        return False
+
+    def _drop(self, col):
+        async def cb(interaction):
+            async with self.lock:
+                if self.done:
+                    return await interaction.response.defer()
+                if interaction.user.id not in (self.p1.id, self.p2.id):
+                    return await interaction.response.send_message("you're not in this game", ephemeral=True)
+                if interaction.user.id != self.turn.id:
+                    return await interaction.response.send_message("not your turn", ephemeral=True)
+                row = next((r for r in range(C4_H - 1, -1, -1) if self.grid[r][col] == 0), None)
+                if row is None:
+                    return await interaction.response.send_message("that column's full", ephemeral=True)
+                v = self.piece(self.turn)
+                self.grid[row][col] = v
+                if self.won(v):
+                    self.done = True
+                    win, lose = (self.p1, self.p2) if v == 1 else (self.p2, self.p1)
+                    net, _ = await self.kit.payout(self.space, win, self.amount, self.amount * 2, "connect4")
+                    await self.kit.payout(self.space, lose, self.amount, 0, "connect4")
+                    return await interaction.response.edit_message(content=self.header(f"🏆 {win.mention} connects four and takes {self.kit.chips(net)}!"), view=None)
+                if all(self.grid[0][c] for c in range(C4_W)):
+                    self.done = True
+                    await self.kit.payout(self.space, self.p1, self.amount, self.amount, "connect4")
+                    await self.kit.payout(self.space, self.p2, self.amount, self.amount, "connect4")
+                    return await interaction.response.edit_message(content=self.header("🤝 board's full - bets refunded"), view=None)
+                self.turn = self.p2 if self.turn.id == self.p1.id else self.p1
+                await interaction.response.edit_message(content=self.header(), view=self)
+        return cb
+
+    async def on_timeout(self):
+        async with self.lock:
+            if self.done:
+                return
+            self.done = True
+            win = self.p2 if self.turn.id == self.p1.id else self.p1
+            net, _ = await self.kit.payout(self.space, win, self.amount, self.amount * 2, "connect4")
+            await self.kit.payout(self.space, self.turn, self.amount, 0, "connect4")
+            if self.message:
+                try:
+                    await self.message.edit(content=self.header(f"⏱️ {self.turn.mention} took too long - {win.mention} wins {self.kit.chips(net)}"), view=None)
+                except discord.HTTPException:
+                    pass
+
+
 class GamesPlus(commands.Cog):
     play = discord.SlashCommandGroup("play", "the newer casino games")
 
@@ -889,6 +1201,90 @@ class GamesPlus(commands.Cog):
     async def heist_cmd(self, ctx, entry: str):
         await self._heist(ctx, entry)
 
+
+    async def _craps(self, ctx, raw, side):
+        amt = await self._amount(ctx, raw)
+        if amt is None:
+            return
+        side = (side or "pass").lower().replace("'", "").replace(" ", "")
+        side = "dont" if side.startswith("dont") else "pass"
+        await self.kit.instant(ctx, amt, "craps", lambda: roll_craps(amt, side))
+
+    @play.command(name="craps", description="pass line or don't pass - shooter rolls till they hit or seven out")
+    async def craps(self, ctx, amount: Option(str, "bet (or 'all')"), side: Option(str, "which side", choices=["pass", "dont pass"], required=False) = "pass"):
+        await self._craps(ctx, amount, side)
+
+    @commands.command(name="craps")
+    async def craps_cmd(self, ctx, amount: str, side: str = "pass"):
+        await self._craps(ctx, amount, side)
+
+    async def _threecard(self, ctx, raw):
+        amt = await self._amount(ctx, raw)
+        if amt is not None:
+            await self.kit.instant(ctx, amt, "threecard", lambda: roll_threecard(amt))
+
+    @play.command(name="threecard", description="3 cards vs the dealer's 3 - straights and up pay a bonus")
+    async def threecard(self, ctx, amount: Option(str, "bet (or 'all')")):
+        await self._threecard(ctx, amount)
+
+    @commands.command(name="threecard", aliases=["3card", "tcp"])
+    async def threecard_cmd(self, ctx, amount: str):
+        await self._threecard(ctx, amount)
+
+    async def _bingo(self, ctx, raw):
+        amt = await self._amount(ctx, raw)
+        if amt is not None:
+            await self.kit.instant(ctx, amt, "bingo", lambda: roll_bingo(amt))
+
+    @play.command(name="bingo", description="30 balls on your card - 1 line 5.2x, 2 lines 20x, 3 lines 60x, 4+ 200x")
+    async def bingo(self, ctx, amount: Option(str, "bet (or 'all')")):
+        await self._bingo(ctx, amount)
+
+    @commands.command(name="bingo")
+    async def bingo_cmd(self, ctx, amount: str):
+        await self._bingo(ctx, amount)
+
+    @play.command(name="penalty", description="pick a corner, beat the keeper - 1.44x")
+    async def penalty(self, ctx, amount: Option(str, "bet (or 'all')")):
+        await self._start_view(ctx, amount, lambda s, a: PenaltyView(self.kit, s, ctx.author, a))
+
+    @commands.command(name="penalty", aliases=["pk"])
+    async def penalty_cmd(self, ctx, amount: str):
+        await self._start_view(ctx, amount, lambda s, a: PenaltyView(self.kit, s, ctx.author, a))
+
+    @play.command(name="doors", description="3 doors, one has the money - stay or switch? 1.44x")
+    async def doors(self, ctx, amount: Option(str, "bet (or 'all')")):
+        await self._start_view(ctx, amount, lambda s, a: DoorsView(self.kit, s, ctx.author, a))
+
+    @commands.command(name="doors", aliases=["montyhall"])
+    async def doors_cmd(self, ctx, amount: str):
+        await self._start_view(ctx, amount, lambda s, a: DoorsView(self.kit, s, ctx.author, a))
+
+    async def _connect4(self, ctx, opponent, raw):
+        if not ctx.guild:
+            return await self.kit.reply(ctx, content="connect 4 needs a server", ephemeral=True)
+        if opponent.bot or opponent.id == ctx.author.id:
+            return await self.kit.reply(ctx, content="pick a real opponent", ephemeral=True)
+        amt = await self._amount(ctx, raw)
+        if amt is None:
+            return
+        for m in (ctx.author, opponent):
+            if self.kit.c.is_banned(m, ctx.guild):
+                return await self.kit.reply(ctx, content=f"{m.display_name} is banned from gambling here", ephemeral=True)
+        if await self.kit.balance(ctx.guild, ctx.author) < amt:
+            return await self.kit.reply(ctx, content="you don't have that many chips", ephemeral=True)
+        view = C4Challenge(self, ctx.guild, ctx.author, opponent, amt)
+        await self.kit.reply(ctx, content=f"{opponent.mention} - {ctx.author.mention} wants a game of connect 4 for "
+                                          f"{self.kit.chips(amt)} each. winner takes it all.", view=view)
+
+    @play.command(name="connect4", description="connect 4 against someone for chips")
+    async def connect4(self, ctx, opponent: Option(discord.Member, "who"), amount: Option(str, "wager each")):
+        await self._connect4(ctx, opponent, amount)
+
+    @commands.command(name="connect4", aliases=["c4"])
+    async def connect4_cmd(self, ctx, opponent: discord.Member, amount: str):
+        await self._connect4(ctx, opponent, amount)
+
     @commands.slash_command(name="games", description="every casino game and what it pays")
     async def games(self, ctx):
         await self.kit.reply(ctx, embed=games_embed())
@@ -897,12 +1293,12 @@ class GamesPlus(commands.Cog):
         await self.kit.reply(ctx, embed=games_embed())
 
 GAME_GUIDE = {
-    '🃏 cards': 'blackjack · baccarat · war · hilo · videopoker · dragontiger · cardguess',
+    '🃏 cards': 'blackjack · baccarat · war · hilo · videopoker · dragontiger · cardguess · threecard',
     "🎰 slots & spins": "slots · jackpot · wheel · chests · scratch · keno",
-    '🎲 dice': 'dice · sicbo · sevens · diceduel · target',
+    '🎲 dice': 'dice · sicbo · sevens · diceduel · target · craps',
     '🚀 risk it': 'crash · rocket · mines · towers · balloon · plinko · ladder',
-    "🪙 quick bets": "coinflip · rps · cups · revolver · roulette · allin · horserace",
-    '⚔️ multiplayer': 'duel · tictactoe · heist · lottery',
+    "🪙 quick bets": "coinflip · rps · cups · revolver · roulette · allin · horserace · bingo · penalty · doors",
+    '⚔️ multiplayer': 'duel · tictactoe · connect4 · heist · lottery',
 }
 
 

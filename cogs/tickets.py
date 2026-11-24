@@ -170,7 +170,7 @@ class Tickets(commands.Cog):
         await cu.respond(ctx, "panel posted", ephemeral=True)
 
     @commands.slash_command(name="ticket-panel", description="post the ticket panel in this channel (staff only)")
-    @commands.has_permissions(manage_guild=True)
+    @cu.staff_check()
     async def ticket_panel(self, ctx,
                            title: Option(str, "panel title", required=False) = "Need help?",
                            description: Option(str, "panel body text", required=False) =
@@ -178,7 +178,7 @@ class Tickets(commands.Cog):
         await self._do_ticket_panel(ctx, title, description)
 
     @commands.command(name="ticket-panel")
-    @commands.has_permissions(manage_guild=True)
+    @cu.staff_check()
     async def ticket_panel_cmd(self, ctx, title: str = "Need help?", *,
                                description: str = "Click below to open a private ticket with staff."):
         await self._do_ticket_panel(ctx, title, description)
@@ -207,12 +207,12 @@ class Tickets(commands.Cog):
         await cu.respond(ctx, f"added {member.mention} to this ticket")
 
     @commands.slash_command(name="add-to-ticket", description="add someone to the current ticket (staff only)")
-    @commands.has_permissions(manage_guild=True)
+    @cu.staff_check()
     async def add_to_ticket(self, ctx, member: Option(discord.Member, "who")):
         await self._do_add_to_ticket(ctx, member)
 
     @commands.command(name="add-to-ticket")
-    @commands.has_permissions(manage_guild=True)
+    @cu.staff_check()
     async def add_to_ticket_cmd(self, ctx, member: discord.Member):
         await self._do_add_to_ticket(ctx, member)
 

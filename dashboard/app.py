@@ -648,6 +648,9 @@ def api_setup_preview():
 def api_setup_request(gid):
     if gid == d.DM_ID:
         return jsonify({"error": "not available for the personal/DM economy"}), 400
+    mine = next((x for x in (session.get("guilds") or []) if str(x.get("id")) == str(gid)), {})
+    if not (is_bot_admin() or mine.get("owner")):
+        return jsonify({"error": "only the server owner can use the server builder"}), 403
     body = request.get_json() or {}
     action = body.get("action", "build")
     style = body.get("style", sl.DEFAULT_STYLE)

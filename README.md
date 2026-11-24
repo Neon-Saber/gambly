@@ -24,6 +24,11 @@ see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 - more games under `/play` (cups, dragontiger, sicbo, sevens, revolver, chests, diceduel, cardguess, target, towers, balloon, videopoker, rocket, tictactoe, heist). prefix is just `!towers` etc. had to group them bc discord caps slash cmds at 100
 - `/claim weekly|monthly|spin`, `/gather fish|mine|hunt|collection`, `/quests`, `/trivia`, `/profile`, `/giveaway`
 - dashboard: games on/off, server builder, better overview
+- works as a personal app too (add it to your account) - games/economy work anywhere with a separate DM wallet. staff, setup, tickets, social stuff only exist in the main server
+- staff ladder: trial security → junior → security → senior → head of security → floor manager → pit boss → co-owner → owner. side roles: dealer (chips), event host (giveaways), on break (turns staff cmds off). `/mod ranks` shows who can do what
+- staff cmds live under `/mod`, `/casino`, `/admin`, `/owner`. `/setup` is owner only (dashboard builder too)
+- `/setup roles` makes ~68 roles w/ dividers + puts them in order under the bot, keeps everyone who has them
+- set OWNER_IDS in .env if someone besides the server owner should count as owner
 
 ## What's in here
 
