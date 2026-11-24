@@ -111,33 +111,72 @@ def _warn_once(key, action, err):
           f"double check UPSTASH_REDIS_REST_URL/TOKEN in .env.")
 
 
+ENC_PREFIX = "enc1:"
+_fernet_cache = {}
+
+
+class DataLocked(RuntimeError):
+    pass
+
+
+def _fernet():
+    k = (os.getenv("GAMBLY_DATA_KEY") or "").strip()
+    if not k:
+        return None
+    if k not in _fernet_cache:
+        from cryptography.fernet import Fernet
+        _fernet_cache[k] = Fernet(k.encode())
+    return _fernet_cache[k]
+
+
+def encryption_on():
+    return _fernet() is not None
+
+
+def _encode(data, pretty=False):
+    s = json.dumps(data, indent=2 if pretty else None)
+    f = _fernet()
+    return ENC_PREFIX + f.encrypt(s.encode()).decode() if f else s
+
+
+def _decode(raw, key):
+    if isinstance(raw, str) and raw.startswith(ENC_PREFIX):
+        f = _fernet()
+        if f is None:
+            raise DataLocked(f"'{key}' is encrypted but GAMBLY_DATA_KEY isn't set here - refusing to treat it as empty")
+        from cryptography.fernet import InvalidToken
+        try:
+            raw = f.decrypt(raw[len(ENC_PREFIX):].encode()).decode()
+        except InvalidToken:
+            raise DataLocked(f"'{key}' couldn't be decrypted - GAMBLY_DATA_KEY doesn't match the one it was saved with")
+    return json.loads(raw)
+
+
 def load(name_or_path, default=None):
-    """Returns the stored dict for this key, or `default` (a fresh {} if
-    not given) if nothing's stored yet anywhere."""
     if default is None:
         default = {}
     _log_backend_once()
     key = _key_for(name_or_path)
 
     if _enabled():
+        raw = None
+        ok = False
         try:
             r = requests.post(_upstash_url(), headers=_headers(), json=["GET", key], timeout=10)
             r.raise_for_status()
             raw = r.json().get("result")
-            if raw is None:
-                return default
-            return json.loads(raw)
+            ok = True
         except Exception as e:
             _warn_once(key, "read", e)
-            # fall through to the local file as a safety net so a network
-            # blip doesn't take down whatever feature triggered this read
+        if ok:
+            return default if raw is None else _decode(raw, key)
 
     path = _local_path(key)
     if not path.exists():
         return default
+    text = path.read_text(encoding="utf-8")
     try:
-        with open(path, "r") as f:
-            return json.load(f)
+        return _decode(text, key)
     except json.JSONDecodeError:
         return default
 
@@ -148,20 +187,36 @@ def save(name_or_path, data):
 
     if _enabled():
         try:
-            r = requests.post(_upstash_url(), headers=_headers(), json=["SET", key, json.dumps(data)], timeout=10)
+            r = requests.post(_upstash_url(), headers=_headers(), json=["SET", key, _encode(data)], timeout=10)
             r.raise_for_status()
             return
         except Exception as e:
             _warn_once(key, "write", e)
-            # fall through and also write locally so the data isn't lost -
-            # it just won't be visible to the other machine until Upstash
-            # is reachable again
 
     path = _local_path(key)
     tmp = path.with_suffix(".json.tmp")
-    with open(tmp, "w") as f:
-        json.dump(data, f, indent=2)
+    tmp.write_text(_encode(data, pretty=True), encoding="utf-8")
     tmp.replace(path)
+
+
+def encrypt_everything():
+    if not encryption_on():
+        raise DataLocked("set GAMBLY_DATA_KEY first")
+    done = []
+    if _enabled():
+        r = requests.post(_upstash_url(), headers=_headers(), json=["KEYS", "*"], timeout=15)
+        r.raise_for_status()
+        keys = [k for k in r.json().get("result") or [] if not k.startswith("lock:")]
+    else:
+        keys = [p.stem for p in _LOCAL_BASE.glob("*.json") if not p.name.startswith(".")]
+    skipped = []
+    for k in keys:
+        try:
+            save(k, load(k))
+            done.append(k)
+        except Exception as e:
+            skipped.append(f"{k}: {e}")
+    return done, skipped
 
 
 # ---------------- cross-process locking ----------------
