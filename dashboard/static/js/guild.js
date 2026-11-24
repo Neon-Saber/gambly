@@ -1,7 +1,7 @@
 const GID = document.body.dataset.gid;
 let STATE = null;
 
-const TABS = ['overview', 'players', 'settings', 'moderation', 'games', 'leveling', 'bounties', 'rebirths', 'activity', 'danger'];
+const TABS = ['overview', 'players', 'settings', 'moderation', 'games', 'builder', 'leveling', 'bounties', 'rebirths', 'activity', 'danger'];
 
 function showTab(name) {
   TABS.forEach((t) => {
@@ -198,6 +198,7 @@ async function init() {
   renderSettings();
   renderModeration();
   renderGameChannels();
+  renderBuilder();
   renderLeveling();
   renderBounties();
   renderRebirths();
@@ -213,16 +214,63 @@ function renderOverview() {
   const totalDebt = users.reduce((s, u) => s + u.loan_owed, 0);
   const defaulted = users.filter((u) => u.loan_defaulted).length;
   const banned = users.filter((u) => u.is_banned).length;
-  const top = users.slice(0, 8);
+  const byWorth = users.slice().sort((a, b) => (b.bal + b.bank) - (a.bal + a.bank));
+  const top = byWorth.slice(0, 8);
+  const total = totalWallet + totalBank;
+
+  const week = STATE.week || {};
+  const nameOf = (uid) => (users.find((u) => u.id === String(uid)) || {}).name || uid;
+  const activity = Object.entries(week.activity || {}).sort((a, b) => b[1] - a[1]);
+  const gamesThisWeek = activity.reduce((s, [, n]) => s + n, 0);
+  const maxAct = activity.length ? activity[0][1] : 1;
+  const bw = week.biggest_win;
+
+  const top10 = byWorth.slice(0, 10);
+  const top10Share = total ? Math.round(100 * top10.reduce((s, u) => s + u.bal + u.bank, 0) / total) : 0;
+  const maxWorth = top10.length ? Math.max(1, top10[0].bal + top10[0].bank) : 1;
 
   el.innerHTML = `
     <div class="stat-row">
       <div class="stat"><div class="num">${users.length}</div><div class="label">Players</div></div>
-      <div class="stat good"><div class="num chip">${fmtChips(totalWallet + totalBank)}</div><div class="label">Chips in circulation</div></div>
+      <div class="stat good"><div class="num chip">${fmtChips(total)}</div><div class="label">Chips in circulation</div></div>
+      <div class="stat"><div class="num">${fmtChips(gamesThisWeek)}</div><div class="label">Games played this week</div></div>
       <div class="stat warn"><div class="num chip">${fmtChips(totalDebt)}</div><div class="label">Total debt owed</div></div>
       <div class="stat ${defaulted ? 'danger' : ''}"><div class="num">${defaulted}</div><div class="label">Defaulted loans</div></div>
       <div class="stat ${banned ? 'danger' : ''}"><div class="num">${banned}</div><div class="label">Banned players</div></div>
     </div>
+
+    <div class="overview-grid">
+      <div class="card">
+        <div class="card-head"><h2>This week</h2><span class="hint">Resets with the weekly tournament</span></div>
+        <div class="week-win">
+          <div class="label">Biggest single win</div>
+          ${bw ? `<div class="num chip">+${fmtChips(bw.amount)}</div><div class="who">${escapeHtml(bw.name || nameOf(bw.user_id))}</div>`
+               : '<div class="who">No wins recorded yet.</div>'}
+        </div>
+        <div class="label" style="margin:14px 0 6px;">Most active</div>
+        ${activity.slice(0, 6).map(([uid, n]) => `
+          <div class="hbar">
+            <span class="hbar-name">${escapeHtml(nameOf(uid))}</span>
+            <span class="hbar-track"><span class="hbar-fill" style="width:${Math.max(4, Math.round(100 * n / maxAct))}%"></span></span>
+            <span class="hbar-val mono">${n}</span>
+          </div>`).join('') || '<div class="empty">Nobody has played yet this week.</div>'}
+      </div>
+
+      <div class="card">
+        <div class="card-head"><h2>Where the chips are</h2><span class="hint">Top 10 hold ${top10Share}% of everything</span></div>
+        <div class="split-bar" title="wallet vs bank">
+          <span class="split-wallet" style="width:${total ? Math.round(100 * totalWallet / total) : 50}%"></span>
+        </div>
+        <div class="split-legend"><span><i class="dot wallet"></i>Wallets ${fmtChips(totalWallet)}</span><span><i class="dot bank"></i>Banks ${fmtChips(totalBank)}</span></div>
+        ${top10.map((u) => `
+          <div class="hbar">
+            <span class="hbar-name">${escapeHtml(u.name)}</span>
+            <span class="hbar-track"><span class="hbar-fill gold" style="width:${Math.max(3, Math.round(100 * (u.bal + u.bank) / maxWorth))}%"></span></span>
+            <span class="hbar-val chip">${fmtChips(u.bal + u.bank)}</span>
+          </div>`).join('') || '<div class="empty">No players yet.</div>'}
+      </div>
+    </div>
+
     <div class="card">
       <div class="card-head"><h2>Richest players</h2><span class="hint">Wallet + bank</span></div>
       <div class="table-wrap"><table>
@@ -540,17 +588,29 @@ async function renderGameChannels() {
     return;
   }
   const games = STATE.game_list || [];
+  const groupOf = {};
+  Object.entries(STATE.game_groups || {}).forEach(([grp, list]) => list.forEach((g) => { groupOf[g] = grp; }));
+  const disabled = new Set(STATE.disabled_games || []);
+  const sorted = games.slice().sort((a, b) => (groupOf[a] || 'zz').localeCompare(groupOf[b] || 'zz') || a.localeCompare(b));
+  const onCount = games.filter((g) => !disabled.has(g)).length;
   el.innerHTML = `
     <div class="card">
       <div class="card-head">
-        <h2>Per-game channels</h2>
-        <span class="hint">Leave "Auto-detect" to match a channel by name (e.g. #slots) - pick a channel here to lock it manually instead</span>
+        <h2>Games <span class="badge badge-gold">${onCount}/${games.length} on</span></h2>
+        <span class="hint">Switch games off for this server, or lock each one to a channel. "Auto-detect" matches a channel by name (e.g. #slots).</span>
+      </div>
+      <div class="game-filter">
+        <input type="text" id="games-filter" placeholder="Filter games…" autocomplete="off">
+        <button class="btn btn-sm btn-ghost" id="games-all-on">All on</button>
+        <button class="btn btn-sm btn-ghost" id="games-all-off">All off</button>
       </div>
       <div class="table-wrap"><table>
-        <thead><tr><th>Game</th><th>Channel</th></tr></thead>
-        <tbody>${games.map((g) => `
+        <thead><tr><th>On</th><th>Game</th><th>Group</th><th>Channel</th></tr></thead>
+        <tbody>${sorted.map((g) => `
           <tr data-game="${g}">
-            <td>/${escapeHtml(g)}</td>
+            <td><label class="switch"><input type="checkbox" data-game-on ${disabled.has(g) ? '' : 'checked'}><span class="track"></span></label></td>
+            <td class="mono">${escapeHtml(g)}</td>
+            <td><span class="badge badge-muted">${escapeHtml(groupOf[g] || '—')}</span></td>
             <td><select data-game-channel style="min-width:200px;"><option value="">Loading channels…</option></select></td>
           </tr>`).join('')}
         </tbody>
@@ -570,13 +630,26 @@ async function renderGameChannels() {
   document.getElementById('custom-env-box').value =
     Object.entries(STATE.custom_env || {}).map(([k, v]) => `${k}=${v}`).join('\n');
 
+  document.getElementById('games-filter').addEventListener('input', (e) => {
+    const q = e.target.value.trim().toLowerCase();
+    document.querySelectorAll('#tab-games tr[data-game]').forEach((row) => {
+      row.style.display = !q || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+    });
+  });
+  const setAll = (on) => document.querySelectorAll('#tab-games [data-game-on]').forEach((c) => { c.checked = on; });
+  document.getElementById('games-all-on').addEventListener('click', () => setAll(true));
+  document.getElementById('games-all-off').addEventListener('click', () => setAll(false));
+
   document.getElementById('games-save').addEventListener('click', async () => {
     const overrides = {};
+    const off = [];
     document.querySelectorAll('#tab-games tr[data-game]').forEach((row) => {
       overrides[row.dataset.game] = row.querySelector('[data-game-channel]').value || null;
+      if (!row.querySelector('[data-game-on]').checked) off.push(row.dataset.game);
     });
-    const r = await apiPost(`/api/guild/${GID}/game_channels`, { game_channels: overrides });
-    if (r) { toast('Saved.', 'ok'); refresh(); }
+    const r1 = await apiPost(`/api/guild/${GID}/game_channels`, { game_channels: overrides });
+    const r2 = await apiPost(`/api/guild/${GID}/disabled_games`, { disabled_games: off });
+    if (r1 && r2) { toast('Saved.', 'ok'); await refresh(); renderGameChannels(); }
   });
 
   document.getElementById('env-save').addEventListener('click', async () => {
@@ -594,6 +667,144 @@ async function renderGameChannels() {
     sel.innerHTML = channelOptions((STATE.game_channels || {})[g]);
     enhanceSelect(sel);
   });
+}
+
+const BUILDER = { style: null, games: 'grouped', sections: null, meta: null, poll: null };
+
+async function renderBuilder() {
+  const el = document.getElementById('tab-builder');
+  if (STATE.is_personal) {
+    el.innerHTML = `<div class="empty">Not applicable to the personal/DM ledger.</div>`;
+    return;
+  }
+  if (!BUILDER.meta) {
+    BUILDER.meta = await apiGet('/api/setup/styles');
+    if (!BUILDER.meta) return;
+    BUILDER.style = STATE.setup_style || BUILDER.meta.default_style;
+    BUILDER.sections = BUILDER.meta.sections.map((s) => s.key);
+  }
+  const m = BUILDER.meta;
+  el.innerHTML = `
+    <div class="builder">
+      <div class="builder-controls">
+        <div class="card">
+          <div class="card-head"><h2>1 · Divider style</h2><span class="hint">How every channel and category gets named</span></div>
+          <div class="style-grid">${Object.entries(m.styles).map(([k, s]) => `
+            <button class="style-card${k === BUILDER.style ? ' active' : ''}" data-style="${k}">
+              <span class="style-sample">${escapeHtml(s.sample)}</span>
+              <span class="style-label">${escapeHtml(s.label)}</span>
+            </button>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>2 · Sections</h2><span class="hint">🔒 = only Staff can see it</span></div>
+          <div class="section-list">${m.sections.map((s) => `
+            <label class="switch-row section-row">
+              <span class="switch"><input type="checkbox" data-section="${s.key}" ${BUILDER.sections.includes(s.key) ? 'checked' : ''}><span class="track"></span></span>
+              <span class="lbl">${s.emoji} ${escapeHtml(s.title)} ${s.private ? '🔒' : ''}</span>
+            </label>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>3 · Game channels</h2></div>
+          <div class="seg" id="b-games">
+            ${[['grouped', 'Grouped (6 rooms)'], ['per-game', 'One per game'], ['none', 'None']].map(([k, l]) =>
+              `<button data-games="${k}" class="${k === BUILDER.games ? 'active' : ''}">${l}</button>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>4 · Build</h2></div>
+          <p class="desc" style="margin-top:0">Creates roles (Staff, Casino Manager, ping roles), every category and channel, locks the staff and log channels,
+          connects welcome / level-ups / logs / tickets / member count / bot status / game locks, and posts the rules, self-roles, ticket and casino-guide panels.
+          Nothing is ever deleted, and running it again reuses what it already made.</p>
+          <div class="builder-actions">
+            <button class="btn btn-gold" id="b-build">Build in Discord</button>
+            <button class="btn btn-ghost" id="b-restyle" ${STATE.setup_built ? '' : 'disabled title="Build first"'}>Only rename to this style</button>
+          </div>
+          <div id="b-status" class="build-status"></div>
+        </div>
+      </div>
+      <div class="builder-preview">
+        <div class="discord-preview">
+          <div class="dp-head">${escapeHtml(STATE.name)} <span>⌄</span></div>
+          <div id="dp-body" class="dp-body"></div>
+        </div>
+        <div class="hint" id="dp-count" style="margin-top:8px;text-align:center;"></div>
+      </div>
+    </div>`;
+
+  el.querySelectorAll('[data-style]').forEach((b) => b.addEventListener('click', () => {
+    BUILDER.style = b.dataset.style;
+    el.querySelectorAll('[data-style]').forEach((x) => x.classList.toggle('active', x === b));
+    drawPreview();
+  }));
+  el.querySelectorAll('[data-section]').forEach((c) => c.addEventListener('change', () => {
+    BUILDER.sections = [...el.querySelectorAll('[data-section]:checked')].map((x) => x.dataset.section);
+    drawPreview();
+  }));
+  el.querySelectorAll('[data-games]').forEach((b) => b.addEventListener('click', () => {
+    BUILDER.games = b.dataset.games;
+    el.querySelectorAll('[data-games]').forEach((x) => x.classList.toggle('active', x === b));
+    drawPreview();
+  }));
+  document.getElementById('b-build').addEventListener('click', () => queueBuild('build'));
+  document.getElementById('b-restyle').addEventListener('click', () => queueBuild('restyle'));
+  drawPreview();
+  showBuildStatus(STATE.setup_status);
+  if (STATE.setup_status && ['queued', 'running'].includes(STATE.setup_status.state)) pollBuild();
+}
+
+async function drawPreview() {
+  const q = new URLSearchParams({ style: BUILDER.style, games: BUILDER.games, sections: BUILDER.sections.join(',') });
+  const plan = BUILDER.sections.length ? await apiGet(`/api/setup/preview?${q}`) : [];
+  const body = document.getElementById('dp-body');
+  if (!plan || !body) return;
+  let n = 0;
+  body.innerHTML = plan.map((cat) => `
+    <div class="dp-cat">${escapeHtml(cat.name)} <span class="dp-caret">⌄</span>${cat.private ? '<span class="dp-lock">🔒</span>' : ''}</div>
+    ${cat.channels.map((c) => { n += 1; return `
+      <div class="dp-ch" title="${c.games ? 'games: ' + escapeHtml(c.games.join(', ')) : ''}">
+        <span class="dp-icon">${c.kind === 'voice' ? '🔊' : (c.readonly ? '📢' : '#')}</span><span class="dp-name">${escapeHtml(c.name)}</span>
+      </div>`; }).join('')}`).join('') || '<div class="empty">Pick at least one section.</div>';
+  document.getElementById('dp-count').textContent = `${plan.length} categories · ${n} channels`;
+}
+
+async function queueBuild(action) {
+  if (action === 'build' && !BUILDER.sections.length) { toast('Pick at least one section.', 'error'); return; }
+  const verb = action === 'build' ? 'create these roles and channels in' : 'rename every channel the builder made in';
+  if (!confirm(`This will ${verb} your Discord server. Continue?`)) return;
+  const r = await apiPost(`/api/guild/${GID}/setup_request`, {
+    action, style: BUILDER.style, sections: BUILDER.sections, game_layout: BUILDER.games,
+  });
+  if (r) {
+    toast('Queued - the bot picks it up within ~10 seconds.', 'ok');
+    showBuildStatus({ state: 'queued', log: ['waiting for the bot…'] });
+    pollBuild();
+  }
+}
+
+function showBuildStatus(st) {
+  const box = document.getElementById('b-status');
+  if (!box || !st) return;
+  const label = { queued: '⏳ Queued', running: '🏗️ Building', done: '✅ Done', error: '❌ Failed' }[st.state] || st.state;
+  box.innerHTML = `<div class="build-state ${escapeHtml(st.state)}">${label}</div>` +
+    `<pre class="build-log">${escapeHtml((st.log || []).join('\n').replace(/\*\*/g, ''))}</pre>`;
+}
+
+function pollBuild() {
+  clearInterval(BUILDER.poll);
+  BUILDER.poll = setInterval(async () => {
+    const r = await apiGet(`/api/guild/${GID}/setup_status`);
+    if (!r) return;
+    showBuildStatus(r.status);
+    if (r.status && ['done', 'error'].includes(r.status.state)) {
+      clearInterval(BUILDER.poll);
+      STATE = (await apiGet(`/api/guild/${GID}`)) || STATE;
+      const rb = document.getElementById('b-restyle');
+      if (rb && STATE.setup_built) { rb.disabled = false; rb.removeAttribute('title'); }
+      renderModeration(); renderGameChannels(); renderLeveling();
+    }
+  }, 3000);
 }
 
 // -------------------------------------------------------- leveling & welcome
@@ -978,6 +1189,10 @@ const SETTINGS_INDEX = [
   { label: 'Bot status embed', tab: 'moderation', sel: '#st-enabled' },
   { label: 'Bot status channel', tab: 'moderation', sel: '#st-channel' },
   { label: 'Per-game channels', tab: 'games', sel: '#tab-games .card' },
+  { label: 'Turn games on / off', tab: 'games', sel: '#games-filter' },
+  { label: 'Server builder / auto-create channels', tab: 'builder', sel: '.style-grid' },
+  { label: 'Channel divider style', tab: 'builder', sel: '.style-grid' },
+  { label: 'Restyle channels', tab: 'builder', sel: '#b-restyle' },
   { label: 'Custom server env', tab: 'games', sel: '#custom-env-box' },
   { label: 'Welcome messages', tab: 'leveling', sel: '#w-enabled' },
   { label: 'Welcome channel', tab: 'leveling', sel: '#w-channel' },

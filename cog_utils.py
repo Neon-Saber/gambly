@@ -115,6 +115,31 @@ GAME_CHANNEL_ALIASES = {
     "baccarat": ["baccarat"],
     "rps": ["rps"],
     "ladder": ["ladder"],
+    "towers": ["towers"],
+    "cups": ["cups"],
+    "dragontiger": ["dragontiger", "dragon-tiger"],
+    "sicbo": ["sicbo", "sic-bo"],
+    "sevens": ["sevens"],
+    "videopoker": ["videopoker", "video-poker"],
+    "revolver": ["revolver"],
+    "balloon": ["balloon"],
+    "chests": ["chests"],
+    "diceduel": ["diceduel", "dice-duel"],
+    "cardguess": ["cardguess", "card-guess"],
+    "target": ["target"],
+    "rocket": ["rocket"],
+    "heist": ["heist"],
+    "tictactoe": ["tictactoe", "tic-tac-toe"],
+    "scratch": ["scratch"],
+}
+
+GAME_GROUPS = {
+    "card-tables": {"emoji": "🃏", "games": ["blackjack", "baccarat", "war", "hilo", "videopoker", "dragontiger", "cardguess"]},
+    "slots-and-spins": {"emoji": "🎰", "games": ["slots", "jackpot", "wheel", "chests", "scratch", "keno"]},
+    "dice-games": {"emoji": "🎲", "games": ["dice", "sicbo", "sevens", "diceduel", "target"]},
+    "crash-and-mines": {"emoji": "🚀", "games": ["crash", "rocket", "mines", "towers", "balloon", "plinko", "ladder"]},
+    "quick-bets": {"emoji": "🪙", "games": ["coinflip", "rps", "cups", "revolver", "roulette", "allin", "horserace"]},
+    "pvp-arena": {"emoji": "⚔️", "games": ["duel", "tictactoe", "heist"]},
 }
 
 

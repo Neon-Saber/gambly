@@ -15,6 +15,7 @@ except ImportError:  # pip install -r requirements.txt not run yet
     _ServerSession = None
 
 import cog_utils as cu
+import server_layout as sl
 
 from . import data as d
 from . import discord_api as dapi
@@ -209,6 +210,12 @@ def api_guild(gid):
             "game_channels": g_cfg.get("game_channels", {}),
             "custom_env": g_cfg.get("custom_env", {}),
             "game_list": sorted(cu.GAME_CHANNEL_ALIASES.keys()),
+            "game_groups": {k: v["games"] for k, v in cu.GAME_GROUPS.items()},
+            "disabled_games": g_cfg.get("disabled_games", []),
+            "week": g_cfg.get("week", {}),
+            "setup_style": (g_cfg.get("server_layout") or {}).get("style"),
+            "setup_built": bool((g_cfg.get("server_layout") or {}).get("channels")),
+            "setup_status": g_cfg.get("setup_status"),
             "welcome_enabled": g_cfg.get("welcome_enabled", False),
             "welcome_channel_id": g_cfg.get("welcome_channel_id"),
             "welcome_message": g_cfg.get("welcome_message"),
@@ -585,6 +592,81 @@ def set_game_channels(gid):
         d.log_event((g.get("name") or gid), f"updated game channel locks: {', '.join(changed)}",
                     actor=current_user()["username"])
     return jsonify({"ok": True, "game_channels": gc})
+
+
+@app_routes.route("/api/guild/<gid>/disabled_games", methods=["POST"])
+@guild_access_required
+def set_disabled_games(gid):
+    if gid == d.DM_ID:
+        return jsonify({"error": "not available for the personal/DM economy"}), 400
+    wanted = (request.get_json() or {}).get("disabled_games", [])
+    valid = set(cu.GAME_CHANNEL_ALIASES)
+    clean = sorted({str(x) for x in wanted if str(x) in valid})
+    cfg = d.load(d.cfg_file)
+    g = d.guild_cfg(cfg, gid)
+    before = set(g.get("disabled_games", []))
+    g["disabled_games"] = clean
+    d.save(d.cfg_file, cfg)
+    off, on = set(clean) - before, before - set(clean)
+    if off or on:
+        parts = ([f"turned off {', '.join(sorted(off))}"] if off else []) + ([f"turned on {', '.join(sorted(on))}"] if on else [])
+        d.log_event((g.get("name") or gid), "; ".join(parts), actor=current_user()["username"])
+    return jsonify({"ok": True, "disabled_games": clean})
+
+
+@app_routes.route("/api/setup/styles")
+@login_required
+def api_setup_styles():
+    return jsonify({
+        "styles": sl.STYLES,
+        "default_style": sl.DEFAULT_STYLE,
+        "sections": [{"key": s["key"], "title": s["title"], "emoji": s["emoji"],
+                      "private": s.get("private", False), "count": len(s["channels"])} for s in sl.SECTIONS],
+    })
+
+
+@app_routes.route("/api/setup/preview")
+@login_required
+def api_setup_preview():
+    style = request.args.get("style", sl.DEFAULT_STYLE)
+    games = request.args.get("games", "grouped")
+    sections = [s for s in request.args.get("sections", "").split(",") if s] or None
+    return jsonify(sl.build_plan(style, sections, games))
+
+
+@app_routes.route("/api/guild/<gid>/setup_request", methods=["POST"])
+@guild_access_required
+def api_setup_request(gid):
+    if gid == d.DM_ID:
+        return jsonify({"error": "not available for the personal/DM economy"}), 400
+    body = request.get_json() or {}
+    action = body.get("action", "build")
+    style = body.get("style", sl.DEFAULT_STYLE)
+    if action not in ("build", "restyle") or style not in sl.STYLES:
+        return jsonify({"error": "bad action or style"}), 400
+    games = body.get("game_layout", "grouped")
+    if games not in ("grouped", "per-game", "none"):
+        games = "grouped"
+    sections = [s for s in (body.get("sections") or []) if s in sl.SECTION_KEYS]
+    cfg = d.load(d.cfg_file)
+    g = d.guild_cfg(cfg, gid)
+    status = g.get("setup_status") or {}
+    if g.get("setup_request") or (status.get("state") == "running" and time.time() - status.get("ts", 0) < 600):
+        return jsonify({"error": "a build is already queued or running"}), 409
+    g["setup_request"] = {"action": action, "style": style, "sections": sections, "game_layout": games,
+                          "requested_by": current_user()["username"], "ts": time.time()}
+    g["setup_status"] = {"state": "queued", "log": ["waiting for the bot to pick this up…"], "ts": time.time(), "action": action}
+    d.save(d.cfg_file, cfg)
+    d.log_event((g.get("name") or gid), f"queued a server {action} ({style} style)", actor=current_user()["username"])
+    return jsonify({"ok": True})
+
+
+@app_routes.route("/api/guild/<gid>/setup_status")
+@guild_access_required
+def api_setup_status(gid):
+    cfg = d.load(d.cfg_file)
+    g = cfg.get(gid) or {}
+    return jsonify({"status": g.get("setup_status"), "style": (g.get("server_layout") or {}).get("style")})
 
 
 @app_routes.route("/api/guild/<gid>/custom_env", methods=["POST"])

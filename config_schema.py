@@ -198,6 +198,13 @@ def ensure_guild(all_cfg, gid, name=None):
         g.setdefault(f"log_{log_type}_channel", env_channel)
         g.setdefault(f"log_{log_type}_enabled", env_channel is not None)
 
+    g.setdefault("disabled_games", [])
+
+    g.setdefault("server_layout", {})
+    g.setdefault("self_roles", [])
+    g.setdefault("setup_request", None)
+    g.setdefault("setup_status", None)
+
     return g
 
 

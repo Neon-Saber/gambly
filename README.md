@@ -16,6 +16,15 @@ settings, Bounties, Activity log, Danger zone) are untouched.
 For step-by-step hosting instructions (free dashboard hosting + putting the bot on Oracle Cloud),
 see **[DEPLOYMENT.md](DEPLOYMENT.md)**.
 
+## new stuff
+
+- `/setup build` makes the whole server (roles, categories, channels w/ emoji dividers, panels) and hooks everything up. `/setup restyle` to switch divider style. also in the dashboard under Server Builder
+- styles: angle `《💬》general`, bar `💬｜general`, dot `💬・general`, bracket `【💬】general`, corner `「💬」general`, sparkle `┊✧・general`, plain `💬-general`
+- bot needs manage channels + manage roles and its role above the ones it gives out
+- more games under `/play` (cups, dragontiger, sicbo, sevens, revolver, chests, diceduel, cardguess, target, towers, balloon, videopoker, rocket, tictactoe, heist). prefix is just `!towers` etc. had to group them bc discord caps slash cmds at 100
+- `/claim weekly|monthly|spin`, `/gather fish|mine|hunt|collection`, `/quests`, `/trivia`, `/profile`, `/giveaway`
+- dashboard: games on/off, server builder, better overview
+
 ## What's in here
 
 ```

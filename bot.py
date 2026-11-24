@@ -434,6 +434,9 @@ async def _game_channel_check(ctx):
 
     all_cfg = loadCfg()
     g = get_guild_cfg(all_cfg, ctx.guild)
+    if cmd_name in (g.get("disabled_games") or []):
+        await cu.respond(ctx, f"`{cmd_name}` is switched off on this server right now", ephemeral=True)
+        raise GameChannelLocked()
     channel_id, changed = cu.resolve_game_channel(ctx.guild, g, cmd_name)
     if changed:
         saveCfg(all_cfg)
@@ -990,7 +993,19 @@ async def on_ready():
 # kept out of this file on purpose - this file is already huge, and the
 # gambling logic above shouldn't have to be scrolled past to find/edit the
 # mod, ticket, report, or logging commands.
-for _ext in ("cogs.moderation", "cogs.tickets", "cogs.reports", "cogs.logging_events", "cogs.leveling", "cogs.welcome", "cogs.server_stats", "cogs.diagnostics", "cogs.bot_status"):
+import types as _types
+bot.casino = _types.SimpleNamespace(
+    get_space=get_space, is_banned=is_banned, econ_file_for=econ_file_for,
+    loadEcon=loadEcon, save=save, acct=acct, take_tax=take_tax, record_game=record_game,
+    check_bet_badges=check_bet_badges, chips=chips, reply=reply, log_event=log_event,
+    parse_slash_amount=parse_slash_amount, parse_amount_core=parse_amount_core,
+    pop_rig=pop_rig, loadCfg=loadCfg, saveCfg=saveCfg, get_guild_cfg=get_guild_cfg,
+    is_manager=is_manager, spam_check=spam_check, need_guild=need_guild,
+    rebirth_mult=rebirth_mult, GAME_COMMANDS=GAME_COMMANDS,
+)
+
+for _ext in ("cogs.moderation", "cogs.tickets", "cogs.reports", "cogs.logging_events", "cogs.leveling", "cogs.welcome", "cogs.server_stats", "cogs.diagnostics", "cogs.bot_status",
+             "cogs.games_plus", "cogs.economy_plus", "cogs.server_setup"):
     try:
         bot.load_extension(_ext)
         print(f"loaded {_ext}")
@@ -1041,6 +1056,18 @@ HELP_TEXT = (
     "war <amt>, hilo <amt>, crash <amt> <target multiplier>, mines <amt> [mine count], plinko <amt>, "
     "horserace <amt> <horse>, scratch, duel <user> <amt>, wheel <amt>, keno <amt> <numbers>, "
     "baccarat <amt> <player/banker/tie>, rps <amt> <rock/paper/scissors>, ladder <amt> <rungs 1-6>\n\n"
+    "**more games** (slash: `/play <game>`, prefix: `!<game>`) - `/games` shows them all by type\n"
+    "cups <amt> <1-3>, dragontiger <amt> <dragon/tiger/tie>, sicbo <amt> <big/small/odd/even/triple>, "
+    "sevens <amt> <under/over/seven>, revolver <amt> <bullets 1-5>, chests <amt> <1-5>, diceduel <amt>, "
+    "cardguess <amt> <red/black/suit/rank>, target <amt> <2-95>, towers <amt> [easy/medium/hard], "
+    "balloon <amt>, videopoker <amt>, rocket <amt> [auto cash-out], tictactoe <user> <amt>, heist <entry>\n\n"
+    "**more ways to earn**\n"
+    "`/claim weekly|monthly|spin` (!weekly, !monthly, !spin), `/gather fish|mine|hunt|collection` "
+    "(!fish, !mine, !hunt, !collection), quests (3 daily quests), trivia, profile [user], "
+    "giveaway <prize> <minutes> [winners] (managers)\n\n"
+    "**server builder** (admins)\n"
+    "`/setup build [style] [games] [skip]` makes every category, channel, role and panel with emoji dividers, "
+    "`/setup restyle <style>` renames them all, `/setup preview <style>` - or use the dashboard's Server Builder tab\n\n"
     "**lottery**\n"
     "lottery (see pot/tickets), buyticket <count> - daily drawing, one winner takes the whole pot\n\n"
     "**casino manager stuff** (admins + whoever's set as manager)\n"
