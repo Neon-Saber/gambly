@@ -862,7 +862,11 @@ def _command_hashes(scope):
     for c in bot.pending_application_commands:
         if bool(c.guild_ids) != (scope == "guild"):
             continue
-        blob = json.dumps(c.to_dict(), sort_keys=True, default=str)
+        d = c.to_dict()
+        for k in ("contexts", "integration_types"):
+            if isinstance(d.get(k), list):
+                d[k] = sorted(d[k])
+        blob = json.dumps(d, sort_keys=True, default=str)
         hashes[c.name] = hashlib.sha256(blob.encode()).hexdigest()
     return hashes
 
