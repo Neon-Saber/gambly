@@ -1163,14 +1163,24 @@ def build_help_embeds():
     ]
 
 
+async def send_help(ctx):
+    pages = build_help_embeds()
+    await reply(ctx, embed=pages[0])
+    for e in pages[1:]:
+        if hasattr(ctx, "respond"):
+            await ctx.followup.send(embed=e)
+        else:
+            await ctx.send(embed=e)
+
+
 @bot.slash_command(name="help", description="list of everything this bot can do")
 async def help_slash(ctx):
-    await reply(ctx, embeds=build_help_embeds())
+    await send_help(ctx)
 
 
 @bot.command(name="help")
 async def help_cmd(ctx):
-    await reply(ctx, embeds=build_help_embeds())
+    await send_help(ctx)
 
 
 # ================= ECONOMY =================
