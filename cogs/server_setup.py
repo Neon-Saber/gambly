@@ -884,6 +884,10 @@ class ServerSetup(commands.Cog):
                     result = await self.restyle(guild, style, progress, theme, req.get('pattern'), req.get('cat_pattern'))
                 elif req.get("action") == "undo":
                     result = await self.undo(guild, progress)
+                elif req.get("action") == "roles":
+                    pc = req.get("panel_channel")
+                    pc = int(pc) if pc and str(pc).isdigit() else self.default_panel_channel(guild)
+                    result = await self.apply_kit(guild, req.get("groups") or sl.ROLE_KIT_KEYS, pc, progress)
                 else:
                     result = await self.build(guild, style=style, sections=req.get('sections') or None,
                                               game_layout=req.get('game_layout', 'grouped'), theme=theme,

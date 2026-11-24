@@ -3,63 +3,46 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ bot_name }} — Bot admin</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<title>{{ bot_name }} · bot admin</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='r5') }}">
 </head>
 <body>
-<div class="shell" style="flex-direction:column;">
-  <div class="topbar">
-    <div class="topbar-left">
-      {% include "_mark.html" %}
-      <span>{{ bot_name }}</span>
-      <span class="topbar-crumb">/ <b>Bot admin</b></span>
-    </div>
-    <div class="topbar-right">
-      <a class="btn btn-sm btn-ghost" href="{{ url_for('app_routes.dashboard_home') }}">Your servers</a>
-      <a class="btn btn-sm btn-ghost" href="{{ url_for('auth.logout') }}">Log out</a>
+<div class="wrap" style="max-width:1100px">
+  <div class="bar-top">
+    <a class="brand" href="{{ url_for('app_routes.dashboard_home') }}">{% include "_mark.html" %}<span class="brand-name">{{ bot_name }}</span></a>
+    <div class="row">
+      <a class="b b-sm b-ghost" href="{{ url_for('app_routes.dashboard_home') }}">your servers</a>
+      <a class="b b-sm b-ghost" href="{{ url_for('auth.logout') }}">log out</a>
     </div>
   </div>
-  <div class="page" id="admin-root">
-    <div class="picker-head">
-      <div>
-        <h1>Bot admin</h1>
-        <p>Cross-server tools. Visible to accounts listed in BOT_ADMIN_IDS only.</p>
-      </div>
-      <a class="btn" href="/api/export_all.csv">Export all balances (CSV)</a>
+  <div class="row" style="justify-content:space-between;align-items:flex-start;margin-bottom:18px">
+    <div>
+      <h1 class="page-title">bot admin</h1>
+      <p class="page-sub" style="margin-bottom:0">every server at once. only accounts in BOT_ADMIN_IDS see this.</p>
     </div>
-    <div class="stat-row" id="admin-stats"></div>
-
-    <div class="card">
-      <div class="card-head"><h2>Find a player across every server</h2></div>
-      <div class="input-row" style="margin-bottom:12px;max-width:420px;">
-        <input type="search" id="admin-search" placeholder="Name or user ID">
-      </div>
-      <div class="table-wrap"><table id="admin-search-table"><thead>
-        <tr><th>Player</th><th>Server</th><th class="num">Wallet</th><th class="num">Bank</th></tr>
-      </thead><tbody></tbody></table></div>
-    </div>
-
-    <div class="card">
-      <div class="card-head">
-        <h2>Every server</h2>
-        <span class="hint">Green = bot's actually in it. Red = has activity but isn't installed - almost always someone using a slash command via their personal app install, not a real add.</span>
-      </div>
-      <div class="guild-grid" id="admin-guilds-grid"></div>
-    </div>
-
-    <div class="card">
-      <div class="card-head"><h2>Global defaults</h2><span class="hint">Read by every server via get_setting()</span></div>
-      <div class="field-grid" id="admin-settings-fields"></div>
-      <button class="btn btn-gold" id="admin-settings-save">Save defaults</button>
-    </div>
+    <a class="b" href="/api/export_all.csv">export every balance</a>
   </div>
+  <div class="hero" id="admin-stats"></div>
+  <div class="panel">
+    <div class="panel-head"><h2>find a player anywhere</h2></div>
+    <div class="row" style="max-width:420px;margin-bottom:12px"><input type="search" id="admin-search" placeholder="name or user id"></div>
+    <div class="tbl-wrap"><table class="tbl" id="admin-search-table"><thead>
+      <tr><th>player</th><th>server</th><th class="n">wallet</th><th class="n">bank</th></tr>
+    </thead><tbody></tbody></table></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h2>every server</h2><span class="note">red ones have data but the bot isn't in them. that's almost always someone using the personal app there.</span></div>
+    <div class="servers" id="admin-guilds-grid"></div>
+  </div>
+  <div class="panel">
+    <div class="panel-head"><h2>defaults for every server</h2></div>
+    <div class="grid2" id="admin-settings-fields"></div>
+    <button class="b b-go" id="admin-settings-save">Save</button>
+  </div>
+  <p class="fine"><a href="{{ url_for('app_routes.tos') }}">terms</a> · <a href="{{ url_for('app_routes.privacy') }}">privacy</a></p>
 </div>
 <div id="toast-root"></div>
-<div class="footer-legal">
-  <a href="{{ url_for('app_routes.tos') }}">Terms</a>
-  <a href="{{ url_for('app_routes.privacy') }}">Privacy</a>
-</div>
-<script src="{{ url_for('static', filename='js/api.js') }}"></script>
-<script src="{{ url_for('static', filename='js/bot_admin.js') }}"></script>
+<script src="{{ url_for('static', filename='js/api.js', v='r5') }}"></script>
+<script src="{{ url_for('static', filename='js/bot_admin.js', v='r5') }}"></script>
 </body>
 </html>

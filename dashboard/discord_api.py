@@ -187,10 +187,25 @@ def bot_fetch_roles(guild_id):
     roles = r.json()
     # drop @everyone and bot-managed integration roles - not useful as a manager role
     return [
-        {"id": ro["id"], "name": ro["name"], "color": ro.get("color", 0)}
+        {"id": ro["id"], "name": ro["name"], "color": ro.get("color", 0), "position": ro.get("position", 0)}
         for ro in roles
         if ro["name"] != "@everyone" and not ro.get("managed")
     ]
+
+
+def bot_fetch_members(guild_id, limit=1000):
+    r = requests.get(f"{API_BASE}/guilds/{guild_id}/members", params={"limit": limit},
+                     headers=_bot_headers(), timeout=15)
+    if r.status_code != 200:
+        return None
+    out = []
+    for m in r.json():
+        u = m.get("user") or {}
+        if u.get("bot"):
+            continue
+        out.append({"id": u.get("id"), "name": m.get("nick") or u.get("global_name") or u.get("username") or "?",
+                    "roles": m.get("roles") or []})
+    return out
 
 
 # Discord channel `type` values we care about here - see Discord's docs for

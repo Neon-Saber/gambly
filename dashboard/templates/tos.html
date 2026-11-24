@@ -3,38 +3,22 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{{ bot_name }} — Terms of Service</title>
-<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<title>{{ bot_name }} · terms</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='r5') }}">
 <style>
-  .prose-wrap { max-width: 760px; margin: 0 auto; padding: 48px 24px 80px; }
-  .prose-wrap h1 { font-size: 26px; margin-bottom: 4px; }
-  .prose-wrap .updated { color: var(--muted, #8a9490); font-size: 13px; margin-bottom: 32px; }
-  .prose-wrap h2 { font-size: 17px; margin: 32px 0 10px; color: var(--gold, #c8a24d); }
-  .prose-wrap p, .prose-wrap li { line-height: 1.65; font-size: 14.5px; }
-  .prose-wrap ul { padding-left: 20px; margin: 8px 0; }
-  .prose-wrap li { margin: 4px 0; }
-  .prose-wrap code { background: var(--bg-2, #17211c); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
-  .prose-wrap a { color: var(--gold-bright, #ddbb63); text-decoration: underline; }
-  .back {
-    display: inline-flex; align-items: center; gap: 7px;
-    margin-top: 40px;
-    padding: 9px 16px;
-    border-radius: var(--radius, 7px);
-    border: 1px solid var(--line, #2a3a33);
-    background: var(--bg-3, #1e2b24);
-    color: var(--ink, #ece7db) !important;
-    font-size: 13.5px;
-    font-weight: 500;
-    text-decoration: none !important;
-    transition: border-color 120ms ease, background 120ms ease;
-  }
-  .back:hover { border-color: #3a4d43; background: #223027; }
-  .back svg { flex-shrink: 0; }
+  .prose-wrap { max-width: 720px; margin: 0 auto; padding: 44px 22px 80px; }
+  .prose-wrap h1 { font: 34px/1.1 var(--display); margin-bottom: 6px; }
+  .prose-wrap .updated { color: var(--ink-3); font-size: 13px; margin-bottom: 30px; }
+  .prose-wrap h2 { font-size: 18px; margin: 30px 0 8px; }
+  .prose-wrap p, .prose-wrap li { line-height: 1.65; color: var(--ink-2); }
+  .prose-wrap ul { padding-left: 20px; }
+  .prose-wrap code { background: var(--bg-2); padding: 1px 6px; border-radius: 4px; font-size: 13px; color: var(--cherry-dk); }
+  .back { display: inline-flex; align-items: center; gap: 7px; margin-top: 36px; font-weight: 600; text-decoration: none; }
 </style>
 </head>
 <body>
   <div class="prose-wrap">
-    <h1>{{ bot_name }} — Terms of Service</h1>
+    <h1>{{ bot_name }} · terms</h1>
     <div class="updated">These terms are specific to {{ bot_name }}, a private Discord bot, and apply to anyone using it in the one server it runs in.</div>
 
     <h2>What {{ bot_name }} is</h2>
@@ -63,7 +47,7 @@
     any time, including for anti-abuse reasons.</p>
 
     <h2>No warranty</h2>
-    <p>{{ bot_name }} is provided "as is," without warranty of any kind. The bot's operator does not guarantee
+    <p>{{ bot_name }} is provided "as is," without warranty of any kind. Neon does not guarantee
     uninterrupted availability and is not liable for loss of in-game currency, items, or progress resulting from
     bugs, downtime, resets, or moderation action.</p>
 

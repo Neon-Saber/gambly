@@ -222,6 +222,7 @@ def api_guild(gid):
                              len((g_cfg.get("server_layout") or {}).get("created_roles") or [])],
             "setup_built": bool((g_cfg.get("server_layout") or {}).get("channels")),
             "setup_status": g_cfg.get("setup_status"),
+            "app_id": dapi.CLIENT_ID,
             "welcome_enabled": g_cfg.get("welcome_enabled", False),
             "welcome_channel_id": g_cfg.get("welcome_channel_id"),
             "welcome_message": g_cfg.get("welcome_message"),
@@ -655,7 +656,7 @@ def api_setup_request(gid):
     action = body.get("action", "build")
     style = body.get("style", sl.DEFAULT_STYLE)
     theme = body.get("theme", sl.DEFAULT_THEME)
-    if action not in ("build", "restyle", "undo") or style not in sl.STYLES or theme not in sl.THEMES:
+    if action not in ("build", "restyle", "undo", "roles") or style not in sl.STYLES or theme not in sl.THEMES:
         return jsonify({"error": "bad action or style"}), 400
     games = body.get("game_layout", "grouped")
     if games not in ("grouped", "per-game", "none"):
@@ -671,11 +672,43 @@ def api_setup_request(gid):
     g["setup_request"] = {"action": action, "style": style, "sections": sections, "game_layout": games,
                           "theme": theme, "pattern": sl.clean_pattern(body.get("pattern"), "{name}"),
                           "cat_pattern": sl.clean_pattern(body.get("cat_pattern"), "itle}"),
+                          "groups": [x for x in (body.get("groups") or []) if x in sl.ROLE_KIT_KEYS],
+                          "panel_channel": str(body.get("panel_channel") or "") if str(body.get("panel_channel") or "").isdigit() else None,
                           "requested_by": current_user()["username"], "ts": time.time()}
     g["setup_status"] = {"state": "queued", "log": ["waiting for the bot to pick this up…"], "ts": time.time(), "action": action}
     d.save(d.cfg_file, cfg)
     d.log_event((g.get("name") or gid), f"queued a server {action} ({style} style)", actor=current_user()["username"])
     return jsonify({"ok": True})
+
+
+@app_routes.route("/api/guild/<gid>/staff")
+@guild_access_required
+def api_staff(gid):
+    if gid == d.DM_ID:
+        return jsonify({"error": "not for the personal ledger"}), 400
+    cfg = d.load(d.cfg_file)
+    g = d.guild_cfg(cfg, gid)
+    kr = (g.get("role_kit") or {}).get("roles") or {}
+    live = {r["id"]: r for r in (dapi.bot_fetch_roles(gid) or [])}
+    members = dapi.bot_fetch_members(gid)
+    groups = []
+    found = total = 0
+    for gdef in sl.ROLE_KIT:
+        rows = []
+        for r in gdef["roles"]:
+            rid = kr.get(f"{gdef['key']}:{r['slug']}")
+            role = live.get(str(rid)) if rid else None
+            total += 1
+            found += 1 if role else 0
+            who = [m["name"] for m in (members or []) if rid and str(rid) in m["roles"]] if gdef["key"] in ("staff", "security", "crew") else None
+            rows.append({"key": f"{gdef['key']}:{r['slug']}", "name": role["name"] if role else r["name"],
+                         "color": role["color"] if role else r.get("color", 0), "exists": bool(role),
+                         "tier": r.get("tier"), "side": r.get("side"), "members": who})
+        groups.append({"key": gdef["key"], "title": gdef["title"], "self": gdef.get("self", False), "roles": rows})
+    mine = next((x for x in (session.get("guilds") or []) if str(x.get("id")) == str(gid)), {})
+    return jsonify({"groups": groups, "found": found, "total": total, "members_loaded": members is not None,
+                    "is_owner": bool(is_bot_admin() or mine.get("owner")),
+                    "panels": (g.get("role_kit") or {}).get("panels") or {}})
 
 
 @app_routes.route("/api/guild/<gid>/setup_status")
