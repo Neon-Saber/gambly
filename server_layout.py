@@ -7,13 +7,80 @@ STYLES = {
     'bracket': {'label': 'Lenticular bracket', 'sample': '【💬】general'},
     'corner':  {'label': 'Corner bracket', 'sample': '「💬」general'},
     'sparkle': {'label': 'Sparkle tree', 'sample': '┊✧・general'},
-    'plain':   {'label': 'Emoji dash', 'sample': '💬-general'},
+    'plain':   {'label': 'Dash', 'sample': '💬-general'},
+    'custom':  {'label': 'Your own', 'sample': '꒰💬꒱general'},
 }
 DEFAULT_STYLE = "angle"
 
-def channel_name(style, emoji, base, pos=1, total=3, voice=False):
+THEMES = {
+    "emoji": {"label": "Emoji", "sample": "💬 🎲 📜", "accent": 0xFF6AD5},
+    "unicode": {"label": "Unicode", "sample": "✦ ❀ ☾ ♡", "accent": 0xE8E8E8,
+                "map": {"welcome": "❀", "rules": "✎", "announcements": "⚑", "server-updates": "⟳", "giveaways": "✰",
+                        "roles": "✦", "faq": "?", "general": "☁", "media": "✿", "memes": "☺", "fan-art": "✐",
+                        "self-promo": "➹", "bot-commands": "⌘", "suggestions": "⁂", "casino-guide": "♠", "level-ups": "★",
+                        "big-wins": "♛", "open-a-ticket": "✆", "members": "∞", "general-vc": "♪", "chill-vc": "☾",
+                        "gaming-vc": "⌁", "staff-chat": "⚜", "staff-commands": "⌘", "bot-status": "◉", "staff-call": "☏",
+                        "message-logs": "✐", "mod-logs": "⚖", "report-logs": "⚑", "bank-logs": "$", "ticket-logs": "✆",
+                        "card-tables": "♠", "slots-and-spins": "❖", "dice-games": "⚄", "crash-and-mines": "➶",
+                        "quick-bets": "◎", "pvp-arena": "⚔"},
+                "cats": {"start": "✿", "community": "☁", "casino": "♠", "support": "✆", "voice": "♪", "staff": "⚜", "logs": "⚖"},
+                "pool": ["♠", "♣", "♥", "♦", "✦", "✧", "❖", "◆", "◇", "★", "☆", "⋆"]},
+    "redblack": {"label": "Red & black", "sample": "🥀 🖤 ♠️ 🍷", "accent": 0xC0392B,
+                 "map": {"welcome": "🌹", "rules": "📕", "announcements": "🚨", "server-updates": "⛓️", "giveaways": "🧧",
+                         "roles": "♠️", "faq": "❗", "general": "🖤", "media": "🏮", "memes": "🌶️", "fan-art": "🥀",
+                         "self-promo": "📌", "bot-commands": "🎱", "suggestions": "❣️", "casino-guide": "🃏",
+                         "level-ups": "🔻", "big-wins": "🍷", "open-a-ticket": "📮", "members": "⚫", "general-vc": "🔴",
+                         "chill-vc": "🕸️", "gaming-vc": "🥊", "staff-chat": "🦇", "staff-commands": "🗡️", "bot-status": "🛑",
+                         "staff-call": "☎️", "message-logs": "🕷️", "mod-logs": "⛓️", "report-logs": "🚩", "bank-logs": "🍒",
+                         "ticket-logs": "📮", "card-tables": "♠️", "slots-and-spins": "🍒", "dice-games": "🎲",
+                         "crash-and-mines": "🧨", "quick-bets": "♦️", "pvp-arena": "🗡️"},
+                 "cats": {"start": "🥀", "community": "🖤", "casino": "♠️", "support": "📮", "voice": "🔴", "staff": "🦇", "logs": "🕷️"},
+                 "pool": ["♠️", "♣️", "♥️", "♦️", "🃏", "🎴", "🍒", "🍷", "🎱", "🔻", "🩸", "🌹"]},
+    "ribbon": {"label": "Ribbons & pastel", "sample": "🎀 🌸 💗 🧸", "accent": 0xFF9ED8,
+               "map": {"welcome": "🎀", "rules": "🩰", "announcements": "💌", "server-updates": "🫧", "giveaways": "🎁",
+                       "roles": "🌷", "faq": "🍥", "general": "🌸", "media": "📸", "memes": "🍓", "fan-art": "🖍️",
+                       "self-promo": "💗", "bot-commands": "🧸", "suggestions": "💭", "casino-guide": "🎀", "level-ups": "✨",
+                       "big-wins": "💖", "open-a-ticket": "🧁", "members": "🩷", "general-vc": "🎧", "chill-vc": "☁️",
+                       "gaming-vc": "🎮", "staff-chat": "🍰", "staff-commands": "🧸", "bot-status": "🫧", "staff-call": "📞",
+                       "message-logs": "💌", "mod-logs": "🎀", "report-logs": "🍓", "bank-logs": "🐷", "ticket-logs": "🧁"},
+               "cats": {"start": "🎀", "community": "🌸", "casino": "💗", "support": "💌", "voice": "🎧", "staff": "🧸", "logs": "🍰"},
+               "pool": ["🎀", "🌸", "💗", "🩷", "🍓", "🧸", "💌", "🫧", "🍰", "🌷", "✨", "💞", "🍡", "🦢"]},
+    "text": {"label": "Text only", "sample": "no icons", "accent": 0x99AAB5},
+}
+DEFAULT_THEME = "emoji"
+
+
+def icon_for(theme, base, default, idx=0):
+    t = THEMES.get(theme) or THEMES["emoji"]
+    if theme == "text":
+        return ""
+    if "map" not in t:
+        return default
+    return t["map"].get(base) or t["pool"][idx % len(t["pool"])]
+
+
+def cat_icon(theme, key, default):
+    t = THEMES.get(theme) or THEMES["emoji"]
+    if theme == "text":
+        return ""
+    return (t.get("cats") or {}).get(key, default)
+
+
+def clean_pattern(p, need):
+    p = (p or "").strip()[:40]
+    return p if need in p else None
+
+
+def channel_name(style, emoji, base, pos=1, total=3, voice=False, pattern=None):
     if voice:
         base = base.replace("-", " ").title().replace(" Vc", " VC")
+    if style == "custom" and pattern:
+        return pattern.replace("{icon}", emoji).replace("{name}", base).strip() or base
+    if not emoji:
+        if style == "sparkle":
+            return f"╭✦・{base}" if pos == 0 else (f"╰✦・{base}" if pos == total - 1 else f"┊✧・{base}")
+        return {"dot": f"・{base}", "bar": f"｜{base}", "angle": f"《{base}》", "bracket": f"【{base}】",
+                "corner": f"「{base}」"}.get(style, base)
     if style == 'dot':
         return f"{emoji}・{base}"
     if style == 'bar':
@@ -33,11 +100,19 @@ def channel_name(style, emoji, base, pos=1, total=3, voice=False):
     return f"{emoji}-{base}" if not voice else f"{emoji} {base}"
 
 
-def category_name(style, emoji, title):
+def category_name(style, emoji, title, pattern=None):
+    if style == "custom" and pattern:
+        out = pattern.replace("{icon}", emoji).replace("{TITLE}", title.upper()).replace("{title}", title)
+        return " ".join(out.split()) or title.upper()
+    if not emoji:
+        if style in ("bar", "angle"):
+            return f"─ {title.upper()} ─"
+        if style == "corner":
+            return f"「{title.upper()}」"
     if style in ("bar", "angle"):
         return f"{emoji} {title.upper()} {emoji}"
     if style == "dot":
-        return f"{emoji} {title.title()}"
+        return f"{emoji} {title.title()}".strip()
     if style == "bracket":
         return f"— {title.lower()} —"
     if style == 'corner':
@@ -132,8 +207,11 @@ def game_channels(layout):
         return out
     return [(base, g["emoji"], g["games"]) for base, g in cu.GAME_GROUPS.items()]
 
-def build_plan(style=DEFAULT_STYLE, sections=None, game_layout="grouped"):
+def build_plan(style=DEFAULT_STYLE, sections=None, game_layout="grouped", theme=DEFAULT_THEME, pattern=None, cat_pattern=None):
     style = style if style in STYLES else DEFAULT_STYLE
+    theme = theme if theme in THEMES else DEFAULT_THEME
+    pattern = clean_pattern(pattern, "{name}") or "{icon}︱{name}"
+    cat_pattern = clean_pattern(cat_pattern, "itle}") or "{icon} {TITLE} {icon}"
     wanted = set(sections) if sections else {s['key'] for s in SECTIONS if s.get('default')}
     plan = []
     for sec in SECTIONS:
@@ -147,10 +225,12 @@ def build_plan(style=DEFAULT_STYLE, sections=None, game_layout="grouped"):
         for i, c in enumerate(chans):
             c.setdefault('kind', 'text')
             c["key"] = f"{sec['key']}:{c['base']}"
-            c["name"] = channel_name(style, c["emoji"], c["base"], i, total, voice=c["kind"] == "voice")
+            c["icon"] = icon_for(theme, c["base"], c["emoji"], i)
+            c["name"] = channel_name(style, c["icon"], c["base"], i, total, voice=c["kind"] == "voice", pattern=pattern)
+        ci = cat_icon(theme, sec["key"], sec["emoji"])
         plan.append({
             "key": sec["key"], "title": sec["title"], "emoji": sec["emoji"],
-            "name": category_name(style, sec["emoji"], sec["title"]),
+            "name": category_name(style, ci, sec["title"], cat_pattern),
             "private": sec.get("private", False), "ticket_category": sec.get("ticket_category", False),
             'channels': chans,
         })

@@ -669,7 +669,7 @@ async function renderGameChannels() {
   });
 }
 
-const BUILDER = { style: null, games: 'grouped', sections: null, meta: null, poll: null };
+const BUILDER = { style: null, theme: null, games: 'grouped', sections: null, meta: null, poll: null, pattern: '', catPattern: '' };
 
 async function renderBuilder() {
   const el = document.getElementById('tab-builder');
@@ -681,23 +681,44 @@ async function renderBuilder() {
     BUILDER.meta = await apiGet('/api/setup/styles');
     if (!BUILDER.meta) return;
     BUILDER.style = STATE.setup_style || BUILDER.meta.default_style;
+    BUILDER.theme = STATE.setup_theme || BUILDER.meta.default_theme;
+    BUILDER.pattern = STATE.setup_pattern || '꒰{icon}꒱{name}';
+    BUILDER.catPattern = STATE.setup_cat_pattern || '⋆ {title} ⋆';
     BUILDER.sections = BUILDER.meta.sections.map((s) => s.key);
   }
   const m = BUILDER.meta;
+  const counts = STATE.setup_counts || [0, 0, 0];
   el.innerHTML = `
     <div class="builder">
       <div class="builder-controls">
         <div class="card">
-          <div class="card-head"><h2>1 · Divider style</h2><span class="hint">How every channel and category gets named</span></div>
+          <div class="card-head"><h2>1 · Divider style</h2><span class="hint">How every channel and category gets framed</span></div>
           <div class="style-grid">${Object.entries(m.styles).map(([k, s]) => `
             <button class="style-card${k === BUILDER.style ? ' active' : ''}" data-style="${k}">
               <span class="style-sample">${escapeHtml(s.sample)}</span>
               <span class="style-label">${escapeHtml(s.label)}</span>
             </button>`).join('')}
           </div>
+          <div id="b-custom" class="custom-pattern" style="${BUILDER.style === 'custom' ? '' : 'display:none'}">
+            <div class="field"><label>Channel pattern</label>
+              <input type="text" id="b-pattern" maxlength="40" value="${escapeHtml(BUILDER.pattern)}">
+              <span class="desc">use <code>{icon}</code> and <code>{name}</code> - e.g. <code>꒰{icon}꒱{name}</code>, <code>{icon}︱{name}</code>, <code>⊹ {name}</code></span></div>
+            <div class="field"><label>Category pattern</label>
+              <input type="text" id="b-cat-pattern" maxlength="40" value="${escapeHtml(BUILDER.catPattern)}">
+              <span class="desc">use <code>{icon}</code> and <code>{title}</code> (or <code>{TITLE}</code> for caps)</span></div>
+          </div>
         </div>
         <div class="card">
-          <div class="card-head"><h2>2 · Sections</h2><span class="hint">🔒 = only Staff can see it</span></div>
+          <div class="card-head"><h2>2 · Icons</h2><span class="hint">Emoji, plain unicode symbols, a color theme, or none</span></div>
+          <div class="style-grid">${Object.entries(m.themes).map(([k, t]) => `
+            <button class="style-card${k === BUILDER.theme ? ' active' : ''}" data-theme="${k}">
+              <span class="style-sample">${escapeHtml(t.sample)}</span>
+              <span class="style-label">${escapeHtml(t.label)}</span>
+            </button>`).join('')}
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h2>3 · Sections</h2><span class="hint">🔒 = only Staff can see it</span></div>
           <div class="section-list">${m.sections.map((s) => `
             <label class="switch-row section-row">
               <span class="switch"><input type="checkbox" data-section="${s.key}" ${BUILDER.sections.includes(s.key) ? 'checked' : ''}><span class="track"></span></span>
@@ -706,22 +727,28 @@ async function renderBuilder() {
           </div>
         </div>
         <div class="card">
-          <div class="card-head"><h2>3 · Game channels</h2></div>
+          <div class="card-head"><h2>4 · Game channels</h2></div>
           <div class="seg" id="b-games">
             ${[['grouped', 'Grouped (6 rooms)'], ['per-game', 'One per game'], ['none', 'None']].map(([k, l]) =>
               `<button data-games="${k}" class="${k === BUILDER.games ? 'active' : ''}">${l}</button>`).join('')}
           </div>
         </div>
         <div class="card">
-          <div class="card-head"><h2>4 · Build</h2></div>
+          <div class="card-head"><h2>5 · Build</h2></div>
           <p class="desc" style="margin-top:0">Creates roles (Staff, Casino Manager, ping roles), every category and channel, locks the staff and log channels,
           connects welcome / level-ups / logs / tickets / member count / bot status / game locks, and posts the rules, self-roles, ticket and casino-guide panels.
-          Nothing is ever deleted, and running it again reuses what it already made.</p>
+          Nothing that was already in your server gets touched, and running it again reuses what it made.</p>
           <div class="builder-actions">
             <button class="btn btn-gold" id="b-build">Build in Discord</button>
-            <button class="btn btn-ghost" id="b-restyle" ${STATE.setup_built ? '' : 'disabled title="Build first"'}>Only rename to this style</button>
+            <button class="btn btn-ghost" id="b-restyle" ${STATE.setup_built ? '' : 'disabled title="Build first"'}>Only rename to this look</button>
           </div>
           <div id="b-status" class="build-status"></div>
+        </div>
+        <div class="card danger">
+          <div class="card-head"><h2>Undo the build</h2><span class="hint">${STATE.setup_built ? `${counts[0]} channels · ${counts[1]} categories · ${counts[2]} roles` : 'nothing built yet'}</span></div>
+          <p class="desc" style="margin-top:0">Deletes every channel, category and role the builder made - <b>including all messages in those channels</b> -
+          and clears the settings that pointed at them. Anything that was in your server before stays. Can't be reversed.</p>
+          <button class="btn btn-danger" id="b-undo" ${STATE.setup_built ? '' : 'disabled'}>Undo build</button>
         </div>
       </div>
       <div class="builder-preview">
@@ -736,7 +763,19 @@ async function renderBuilder() {
   el.querySelectorAll('[data-style]').forEach((b) => b.addEventListener('click', () => {
     BUILDER.style = b.dataset.style;
     el.querySelectorAll('[data-style]').forEach((x) => x.classList.toggle('active', x === b));
+    document.getElementById('b-custom').style.display = BUILDER.style === 'custom' ? '' : 'none';
     drawPreview();
+  }));
+  el.querySelectorAll('[data-theme]').forEach((b) => b.addEventListener('click', () => {
+    BUILDER.theme = b.dataset.theme;
+    el.querySelectorAll('[data-theme]').forEach((x) => x.classList.toggle('active', x === b));
+    drawPreview();
+  }));
+  let typing;
+  ['b-pattern', 'b-cat-pattern'].forEach((id) => document.getElementById(id).addEventListener('input', () => {
+    BUILDER.pattern = document.getElementById('b-pattern').value;
+    BUILDER.catPattern = document.getElementById('b-cat-pattern').value;
+    clearTimeout(typing); typing = setTimeout(drawPreview, 250);
   }));
   el.querySelectorAll('[data-section]').forEach((c) => c.addEventListener('change', () => {
     BUILDER.sections = [...el.querySelectorAll('[data-section]:checked')].map((x) => x.dataset.section);
@@ -749,16 +788,26 @@ async function renderBuilder() {
   }));
   document.getElementById('b-build').addEventListener('click', () => queueBuild('build'));
   document.getElementById('b-restyle').addEventListener('click', () => queueBuild('restyle'));
+  document.getElementById('b-undo').addEventListener('click', () => queueBuild('undo'));
   drawPreview();
   showBuildStatus(STATE.setup_status);
   if (STATE.setup_status && ['queued', 'running'].includes(STATE.setup_status.state)) pollBuild();
 }
 
+function builderBody(action) {
+  const body = { action, style: BUILDER.style, theme: BUILDER.theme, sections: BUILDER.sections, game_layout: BUILDER.games };
+  if (BUILDER.style === 'custom') { body.pattern = BUILDER.pattern; body.cat_pattern = BUILDER.catPattern; }
+  return body;
+}
+
 async function drawPreview() {
-  const q = new URLSearchParams({ style: BUILDER.style, games: BUILDER.games, sections: BUILDER.sections.join(',') });
+  const b = builderBody('build');
+  const q = new URLSearchParams({ style: b.style, theme: b.theme, games: b.game_layout, sections: b.sections.join(','),
+    pattern: b.pattern || '', cat_pattern: b.cat_pattern || '' });
+  const seq = (BUILDER.seq = (BUILDER.seq || 0) + 1);
   const plan = BUILDER.sections.length ? await apiGet(`/api/setup/preview?${q}`) : [];
   const body = document.getElementById('dp-body');
-  if (!plan || !body) return;
+  if (!plan || !body || seq !== BUILDER.seq) return;
   let n = 0;
   body.innerHTML = plan.map((cat) => `
     <div class="dp-cat">${escapeHtml(cat.name)} <span class="dp-caret">⌄</span>${cat.private ? '<span class="dp-lock">🔒</span>' : ''}</div>
@@ -771,11 +820,17 @@ async function drawPreview() {
 
 async function queueBuild(action) {
   if (action === 'build' && !BUILDER.sections.length) { toast('Pick at least one section.', 'error'); return; }
-  const verb = action === 'build' ? 'create these roles and channels in' : 'rename every channel the builder made in';
-  if (!confirm(`This will ${verb} your Discord server. Continue?`)) return;
-  const r = await apiPost(`/api/guild/${GID}/setup_request`, {
-    action, style: BUILDER.style, sections: BUILDER.sections, game_layout: BUILDER.games,
-  });
+  if (action !== 'undo' && BUILDER.style === 'custom' && !BUILDER.pattern.includes('{name}')) {
+    toast('Your channel pattern needs {name} in it.', 'error'); return;
+  }
+  const msg = {
+    build: 'This will create these roles and channels in your Discord server. Continue?',
+    restyle: 'This will rename every channel the builder made to the new look. Continue?',
+    undo: 'This DELETES every channel, category and role the builder made, including all messages in those channels. It can\'t be reversed. Continue?',
+  }[action];
+  if (!confirm(msg)) return;
+  if (action === 'undo' && prompt('Type UNDO to confirm') !== 'UNDO') { toast('Cancelled.', ''); return; }
+  const r = await apiPost(`/api/guild/${GID}/setup_request`, builderBody(action));
   if (r) {
     toast('Queued - the bot picks it up within ~10 seconds.', 'ok');
     showBuildStatus({ state: 'queued', log: ['waiting for the bot…'] });
@@ -786,7 +841,7 @@ async function queueBuild(action) {
 function showBuildStatus(st) {
   const box = document.getElementById('b-status');
   if (!box || !st) return;
-  const label = { queued: '⏳ Queued', running: '🏗️ Building', done: '✅ Done', error: '❌ Failed' }[st.state] || st.state;
+  const label = { queued: '⏳ Queued', running: '⚙️ Working', done: '✅ Done', error: '❌ Failed' }[st.state] || st.state;
   box.innerHTML = `<div class="build-state ${escapeHtml(st.state)}">${label}</div>` +
     `<pre class="build-log">${escapeHtml((st.log || []).join('\n').replace(/\*\*/g, ''))}</pre>`;
 }
@@ -800,8 +855,7 @@ function pollBuild() {
     if (r.status && ['done', 'error'].includes(r.status.state)) {
       clearInterval(BUILDER.poll);
       STATE = (await apiGet(`/api/guild/${GID}`)) || STATE;
-      const rb = document.getElementById('b-restyle');
-      if (rb && STATE.setup_built) { rb.disabled = false; rb.removeAttribute('title'); }
+      renderBuilder();
       renderModeration(); renderGameChannels(); renderLeveling();
     }
   }, 3000);
@@ -1193,6 +1247,8 @@ const SETTINGS_INDEX = [
   { label: 'Server builder / auto-create channels', tab: 'builder', sel: '.style-grid' },
   { label: 'Channel divider style', tab: 'builder', sel: '.style-grid' },
   { label: 'Restyle channels', tab: 'builder', sel: '#b-restyle' },
+  { label: 'Undo server build', tab: 'builder', sel: '#b-undo' },
+  { label: 'Icon theme (unicode / red & black / ribbons)', tab: 'builder', sel: '[data-theme]' },
   { label: 'Custom server env', tab: 'games', sel: '#custom-env-box' },
   { label: 'Welcome messages', tab: 'leveling', sel: '#w-enabled' },
   { label: 'Welcome channel', tab: 'leveling', sel: '#w-channel' },

@@ -214,6 +214,12 @@ def api_guild(gid):
             "disabled_games": g_cfg.get("disabled_games", []),
             "week": g_cfg.get("week", {}),
             "setup_style": (g_cfg.get("server_layout") or {}).get("style"),
+            "setup_theme": (g_cfg.get("server_layout") or {}).get("theme"),
+            "setup_pattern": (g_cfg.get("server_layout") or {}).get("pattern"),
+            "setup_cat_pattern": (g_cfg.get("server_layout") or {}).get("cat_pattern"),
+            "setup_counts": [len((g_cfg.get("server_layout") or {}).get("channels") or {}),
+                             len((g_cfg.get("server_layout") or {}).get("categories") or {}),
+                             len((g_cfg.get("server_layout") or {}).get("created_roles") or [])],
             "setup_built": bool((g_cfg.get("server_layout") or {}).get("channels")),
             "setup_status": g_cfg.get("setup_status"),
             "welcome_enabled": g_cfg.get("welcome_enabled", False),
@@ -620,6 +626,8 @@ def api_setup_styles():
     return jsonify({
         "styles": sl.STYLES,
         "default_style": sl.DEFAULT_STYLE,
+        "themes": {k: {"label": v["label"], "sample": v["sample"]} for k, v in sl.THEMES.items()},
+        "default_theme": sl.DEFAULT_THEME,
         "sections": [{"key": s["key"], "title": s["title"], "emoji": s["emoji"],
                       "private": s.get("private", False), "count": len(s["channels"])} for s in sl.SECTIONS],
     })
@@ -631,7 +639,8 @@ def api_setup_preview():
     style = request.args.get("style", sl.DEFAULT_STYLE)
     games = request.args.get("games", "grouped")
     sections = [s for s in request.args.get("sections", "").split(",") if s] or None
-    return jsonify(sl.build_plan(style, sections, games))
+    return jsonify(sl.build_plan(style, sections, games, request.args.get("theme", sl.DEFAULT_THEME),
+                                 request.args.get("pattern"), request.args.get("cat_pattern")))
 
 
 @app_routes.route("/api/guild/<gid>/setup_request", methods=["POST"])
@@ -642,7 +651,8 @@ def api_setup_request(gid):
     body = request.get_json() or {}
     action = body.get("action", "build")
     style = body.get("style", sl.DEFAULT_STYLE)
-    if action not in ("build", "restyle") or style not in sl.STYLES:
+    theme = body.get("theme", sl.DEFAULT_THEME)
+    if action not in ("build", "restyle", "undo") or style not in sl.STYLES or theme not in sl.THEMES:
         return jsonify({"error": "bad action or style"}), 400
     games = body.get("game_layout", "grouped")
     if games not in ("grouped", "per-game", "none"):
@@ -653,7 +663,11 @@ def api_setup_request(gid):
     status = g.get("setup_status") or {}
     if g.get("setup_request") or (status.get("state") == "running" and time.time() - status.get("ts", 0) < 600):
         return jsonify({"error": "a build is already queued or running"}), 409
+    if action == "undo" and not (g.get("server_layout") or {}).get("channels"):
+        return jsonify({"error": "nothing to undo - the builder hasn't made anything here"}), 400
     g["setup_request"] = {"action": action, "style": style, "sections": sections, "game_layout": games,
+                          "theme": theme, "pattern": sl.clean_pattern(body.get("pattern"), "{name}"),
+                          "cat_pattern": sl.clean_pattern(body.get("cat_pattern"), "itle}"),
                           "requested_by": current_user()["username"], "ts": time.time()}
     g["setup_status"] = {"state": "queued", "log": ["waiting for the bot to pick this up…"], "ts": time.time(), "action": action}
     d.save(d.cfg_file, cfg)
