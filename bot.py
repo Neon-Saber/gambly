@@ -1163,14 +1163,83 @@ def build_help_embeds():
     ]
 
 
+HELP_CATS = [
+    ("home", "🏠", "Home", []),
+    ("econ", "💰", "Economy", ["economy", "bank & debt", "more ways to earn", "your data"]),
+    ("games", "🎲", "Games", ["games", "more games", "lottery", "per-game channels"]),
+    ("shop", "🛒", "Shop & Biz", ["shop", "passive income", "rebirth"]),
+    ("server", "⚙️", "Server", ["server builder", "tickets & reports", "leveling", "welcome messages", "member count"]),
+    ("staff", "🛡️", "Staff", ["casino manager", "server owner", "moderation", "durations", "diagnostics"]),
+]
+
+
+def help_sections():
+    out = []
+    for block in HELP_TEXT.split("\n\n"):
+        m = re.match(r"\*\*(.+?)\*\*(.*)", block, re.S)
+        if m:
+            out.append((m.group(1).strip(), m.group(2)))
+    return out
+
+
+def help_page(key, prefix="!"):
+    secs = help_sections()
+    emoji, label, wanted = next((e, l, w) for k, e, l, w in HELP_CATS if k == key)
+    e = discord.Embed(title=f"{emoji} {label}", color=0xFF6AD5)
+    if key == "home":
+        e.description = ("pick a category below 👇\n\n"
+                         f"prefix here is `{prefix}` · slash commands work too\n"
+                         "amounts take `250`, `15k`, `1.5m` or `all`\n\n"
+                         "new here? try `/daily`, `/claim spin` and `/quests` for free chips")
+        e.add_field(name="categories", value="\n".join(f"{em} **{lb}**" for k, em, lb, _ in HELP_CATS if k != "home"))
+    parts = []
+    for title, body in secs:
+        if any(title.lower().startswith(w) for w in wanted):
+            body = body.strip("\n")
+            first, _, rest = body.partition("\n")
+            head = f"**{title}**" + (f" {first.strip()}" if first.strip() else "")
+            parts.append(head + ("\n" + rest if rest else ""))
+    text = "\n\n".join(parts)
+    if key != "home":
+        e.description = text[:4000]
+    e.set_footer(text="buttons work for 3 min")
+    return e
+
+
+class HelpView(discord.ui.View):
+    def __init__(self, author_id, prefix="!", current="home"):
+        super().__init__(timeout=180)
+        self.author_id = author_id
+        self.prefix = prefix
+        self.message = None
+        for i, (k, emoji, label, _) in enumerate(HELP_CATS):
+            b = discord.ui.Button(label=label, emoji=emoji, row=i // 3,
+                                  style=discord.ButtonStyle.primary if k == current else discord.ButtonStyle.secondary)
+            b.callback = self.go(k)
+            self.add_item(b)
+
+    def go(self, key):
+        async def cb(interaction):
+            if interaction.user.id != self.author_id:
+                return await interaction.response.send_message(embed=help_page(key, self.prefix), ephemeral=True)
+            for item in self.children:
+                item.style = discord.ButtonStyle.primary if item.label == next(l for k, _, l, _ in HELP_CATS if k == key) else discord.ButtonStyle.secondary
+            await interaction.response.edit_message(embed=help_page(key, self.prefix), view=self)
+        return cb
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+        if self.message:
+            try:
+                await self.message.edit(view=self)
+            except discord.HTTPException:
+                pass
+
+
 async def send_help(ctx):
-    pages = build_help_embeds()
-    await reply(ctx, embed=pages[0])
-    for e in pages[1:]:
-        if hasattr(ctx, "respond"):
-            await ctx.followup.send(embed=e)
-        else:
-            await ctx.send(embed=e)
+    prefix = get_guild_cfg(loadCfg(), ctx.guild).get("prefix", "!") if ctx.guild else "!"
+    await reply(ctx, embed=help_page("home", prefix), view=HelpView(ctx.author.id, prefix))
 
 
 @bot.slash_command(name="help", description="list of everything this bot can do")
