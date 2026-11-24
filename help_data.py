@@ -87,9 +87,87 @@ FAQ = [
      "It depends on your rank, from Trial Security up to the server owner. /mod ranks in Discord or the Staff & roles page here shows exactly what each rank can do. Nobody can act on someone ranked the same or higher."),
     ("How do I delete my data?",
      "Run /deletemydata in Discord, or use Delete my data on your Account page here. Both remove your balances and levels and can't be undone. Warnings and other moderation records are kept so staff can still enforce the rules, and so is any unpaid loan, so you'd start back at 0 owing it. If you think a warning is wrong, open a ticket."),
+    ("Where do I use commands?",
+     "In the bot commands channel, or the channel made for that thing: daily and quests in daily, work and crime in work, deposits and loans in bank, buying stuff in shop, and every game at its own table. If you use one in the wrong place the bot tells you where it goes."),
+    ("Why did my command get deleted in general?",
+     "Chat and media channels like general, media and memes are for talking, so commands there get removed and the bot points you to bot commands. Staff can still use their commands anywhere."),
     ("Can I add the bot to my own server?",
      "Not as a server bot. It's locked to one server and leaves anywhere else. You can still use the personal app to play anywhere."),
 ]
+
+
+FAQ_SECTIONS = [
+    ("💰 chips", ["Is any of this real money?", "How do I get chips?"]),
+    ("📍 where things go", ["Where do I use commands?", "Why did my command get deleted in general?",
+                           "A game told me to play it somewhere else. Why?", "I can't see some slash commands."]),
+    ("🛡️ staff & rules", ["Who can use staff commands?"]),
+    ("📱 the app & your data", ["What's the personal app?", "Can I add the bot to my own server?", "How do I delete my data?"]),
+]
+
+
+def faq_embeds(color, guild=None):
+    answers = dict(FAQ)
+    out = []
+    for i, (title, qs) in enumerate(FAQ_SECTIONS):
+        e = discord_embed(title=title, color=color)
+        if i == 0:
+            e.description = "the stuff people ask the most. still stuck? open a ticket."
+        for q in qs:
+            if q in answers:
+                e.add_field(name=q, value=answers[q][:1024], inline=False)
+        out.append(e)
+    out[-1].set_footer(text=(guild.name + " · " if guild else "") + "/help <command> explains any command")
+    return out
+
+
+STAFF_GUIDE = [
+    ("📋 the basics", [
+        ("before anything", "read the rules channel, you're the one enforcing it. be fair, be calm, and don't punish people you're arguing with, hand it to someone else."),
+        ("on break", "grab the 😴 On Break role when you're away. it turns your staff commands off till you take it off, so nobody thinks you're ignoring them."),
+        ("ranks", "you can't act on anyone ranked the same as you or higher. if someone above you is the problem, take it to the owner."),
+    ]),
+    ("🎫 tickets & reports", [
+        ("tickets", "answer in the ticket itself, not in DMs, so there's a record. close it with the button once it's sorted. use `/mod ticket-add` to pull someone else in."),
+        ("reports", "reports land in the report logs. check the message link before acting, and warn first unless it's serious."),
+        ("appeals", "if someone appeals your action, let a different staff member look at it."),
+    ]),
+    ("🔨 handing out punishments", [
+        ("usual order", "talk → `warn` → `mute` → `kick` → `ban`. skip steps for spam bots, slurs, NSFW or raids."),
+        ("always give a reason", "every action is logged with its reason in mod logs. \"no reason\" doesn't cut it."),
+        ("chips", "never give, take or reset chips as a punishment unless it's for cheating or alts. casino staff handle that with `/casino`."),
+    ]),
+    ("📍 where to run things", [
+        ("staff commands", "you can run your commands anywhere, members can't. keep big stuff in staff commands so chat stays clean."),
+        ("chat channels", "general, media, memes and the rest are command-free for members, the bot deletes theirs and points them to bot commands."),
+        ("help", "`/help warn` (or any command) shows exactly how it works. `/mod ranks` lists what every rank can do."),
+    ]),
+]
+
+
+def staff_guide_embeds(color, guild=None):
+    import perms
+    out = []
+    ranks = discord_embed(title="🪜 what each rank can do", color=color,
+                          description="each rank gets everything from the ranks below it too.")
+    for t in range(1, 10):
+        cmds = sorted(c for c, need in perms.MOD_TIERS.items() if need == t)
+        if t == perms.CASINO_TIER:
+            cmds += ["/casino " + c for c in sorted(perms.CASINO_CMDS)]
+        if cmds:
+            ranks.add_field(name=perms.TIERS[t], value=" · ".join(f"`{c}`" for c in cmds)[:1024], inline=False)
+    for title, rows in STAFF_GUIDE:
+        e = discord_embed(title=title, color=color)
+        for name, text in rows:
+            e.add_field(name=name, value=text, inline=False)
+        out.append(e)
+    out.insert(1, ranks)
+    out[-1].set_footer(text="questions about this? ask in staff chat")
+    return out
+
+
+def discord_embed(**kw):
+    import discord
+    return discord.Embed(**kw)
 
 
 def sections():

@@ -450,6 +450,49 @@ async def _game_channel_check(ctx):
 
 bot.add_check(_game_channel_check)
 
+ANYWHERE = {"report", "Report Message", "close-ticket", "deletemydata"}
+
+
+async def _channel_rules_check(ctx):
+    if not ctx.guild or ctx.command is None or ctx.command.name in ANYWHERE:
+        return True
+    g = get_guild_cfg(loadCfg(), ctx.guild)
+    quiet = {str(c) for c in (g.get("quiet_channels") or [])}
+    homes = g.get("cmd_channels") or {}
+    if not quiet and not homes:
+        return True
+    import perms
+    if perms.tier_of(ctx.author) >= 1 or perms.sides(ctx.author):
+        return True
+    name = ctx.command.name
+    top = ctx.command.qualified_name.split()[0]
+    here = str(getattr(ctx.channel, "parent_id", None) or ctx.channel.id) if isinstance(ctx.channel, discord.Thread) else str(ctx.channel.id)
+    home = homes.get(name) or homes.get(top)
+    if home and ctx.guild.get_channel(int(home)) is None:
+        home = None
+    if home:
+        if here == str(home):
+            return True
+        msg = f"use that in <#{home}>"
+    elif here in quiet:
+        cc = g.get("commands_channel")
+        msg = f"no commands in here, use <#{cc}>" if cc and ctx.guild.get_channel(int(cc)) else "no commands in here"
+    else:
+        return True
+    if isinstance(ctx, discord.ApplicationContext):
+        await ctx.respond(msg, ephemeral=True)
+    else:
+        await ctx.send(f"{ctx.author.mention} {msg}", delete_after=8)
+        if here in quiet:
+            try:
+                await ctx.message.delete()
+            except discord.HTTPException:
+                pass
+    raise GameChannelLocked()
+
+
+bot.add_check(_channel_rules_check)
+
 
 async def _tier_check(ctx):
     if isinstance(ctx, discord.ApplicationContext) or ctx.guild is None or ctx.command is None:

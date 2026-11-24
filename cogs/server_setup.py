@@ -22,7 +22,7 @@ async def update_cfg(guild_id, fn):
 def read_cfg(guild_id):
     return cfgschema.ensure_guild(cfgschema.load_cfg(), guild_id)
 
-CLEAR_KEYS = list(sl.ENABLE_FLAGS) + ["level_channel_id", "announce_channel", "ticket_category_id"]
+CLEAR_KEYS = list(sl.ENABLE_FLAGS) + ["level_channel_id", "announce_channel", "ticket_category_id", "commands_channel"]
 STYLE_CHOICES = list(sl.STYLES)
 THEME_CHOICES = list(sl.THEMES)
 GAME_CHOICES = ["grouped", "per-game", "none"]
@@ -305,7 +305,7 @@ class ServerSetup(commands.Cog):
                       'categories': dict(layout.get('categories') or {}),
                       'created_roles': sorted(set(layout.get('created_roles') or []) | set(made_roles)),
                       'panels': layout.get('panels') or {}}
-        binds, game_map, panels = {}, {}, {}
+        binds, game_map, panels, cmd_map, quiet = {}, {}, {}, {}, set()
         for cat_plan in plan:
             await say(f"building **{cat_plan['name']}**…")
             cat_over = {}
@@ -359,6 +359,10 @@ class ServerSetup(commands.Cog):
                     binds[b] = existing.id if b == 'announce_channel' else str(existing.id)
                 for game in ch.get("games", []):
                     game_map[game] = str(existing.id)
+                for c in ch.get("cmds", []):
+                    cmd_map[c] = str(existing.id)
+                if ch["kind"] == "text" and (ch.get("quiet") or ch.get("readonly")) and not cat_plan["private"]:
+                    quiet.add(str(existing.id))
                 if ch.get("panel"):
                     panels[ch["panel"]] = existing
 
@@ -370,6 +374,9 @@ class ServerSetup(commands.Cog):
                     g[flag] = True
             if game_map:
                 g.setdefault('game_channels', {}).update(game_map)
+            if cmd_map:
+                g.setdefault('cmd_channels', {}).update(cmd_map)
+            g['quiet_channels'] = sorted(set(g.get('quiet_channels') or []) | quiet)
             g['server_layout'] = new_layout
         await update_cfg(guild.id, save_all)
 
@@ -381,7 +388,8 @@ class ServerSetup(commands.Cog):
         self.bot.casino.log_event(guild.name, f"/setup built the server ({style}/{theme}): {created} created, {reused} reused")
         return (f"✅ done! **{created}** created, **{reused}** already existed.\n"
                 f"style: {sl.STYLES[style]['label']} · icons: {sl.THEMES[theme]['label']} · games: {game_layout} · "
-                f"wired up {len(binds)} settings and {len(game_map)} game channels"
+                f"wired up {len(binds)} settings, {len(game_map)} games and {len(cmd_map)} commands to their channels, "
+                f"{len(quiet)} chat channels are command-free"
                 + (f"\nposted: {', '.join(posted)}" if posted else "")
                 + "\nchanged your mind? `/setup undo` removes everything this made")
     async def _post_panels(self, guild, panels, ping_roles, already, accent=0xFF6AD5):
@@ -406,6 +414,12 @@ class ServerSetup(commands.Cog):
                                       description="click below to open a private ticket with staff - "
                                                   "questions, reports, appeals, bug bounties, anything.")
                     await channel.send(embed=e, view=TicketPanelView())
+                elif kind == "faq":
+                    import help_data
+                    await channel.send(embeds=help_data.faq_embeds(accent, guild))
+                elif kind == "staffguide":
+                    import help_data
+                    await channel.send(embeds=help_data.staff_guide_embeds(accent, guild))
                 elif kind == "games":
                     from cogs.games_plus import games_embed
                     e = games_embed()
@@ -759,6 +773,8 @@ class ServerSetup(commands.Cog):
                     if flag:
                         g[flag] = False
             g['game_channels'] = {k: v for k, v in (g.get('game_channels') or {}).items() if str(v) not in gone_ch}
+            g['cmd_channels'] = {k: v for k, v in (g.get('cmd_channels') or {}).items() if str(v) not in gone_ch}
+            g['quiet_channels'] = [c for c in (g.get('quiet_channels') or []) if str(c) not in gone_ch]
             if str(g.get('staff_role_id')) in gone_roles:
                 g['staff_role_id'] = None
             if str(g.get('manager_role')) in gone_roles:
