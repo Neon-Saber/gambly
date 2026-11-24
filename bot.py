@@ -943,6 +943,22 @@ async def on_connect():
 
 
 @bot.event
+async def on_guild_join(guild):
+    if GUILD_ID and guild.id != GUILD_ID:
+        print(f"joined '{guild.name}' ({guild.id}) but it's not GUILD_ID - leaving")
+        try:
+            await guild.leave()
+        except discord.HTTPException as e:
+            print(f"couldn't leave {guild.id}: {e}")
+        return
+    print(f"joined {guild.name}, syncing commands")
+    try:
+        await bot.sync_commands()
+    except Exception as e:
+        print(f"sync after join failed: {e}")
+
+
+@bot.event
 async def on_ready():
     print(f"{bot.user} is up")
     if debug:
