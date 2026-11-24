@@ -58,7 +58,7 @@
 
       <section class="box danger" aria-labelledby="del-h">
         <div class="box-h"><h2 id="del-h">delete my data</h2></div>
-        <p class="hint">removes your game data and levels from every server and the personal ledger. there's no undo. warnings and other moderation records are kept so staff can still enforce the rules. it doesn't remove you from any server, and the bot will start you fresh if you play again.</p>
+        <p class="hint">removes your game data and levels from every server and the personal ledger. there's no undo. warnings and other moderation records are kept so staff can still enforce the rules, and so is any unpaid loan: you'd start back at 0 chips still owing it. it doesn't remove you from any server, and the bot will start you fresh if you play again.</p>
         <form id="del-form" novalidate>
           <div class="field" style="margin-bottom:12px">
             <label for="del-confirm">type DELETE to confirm</label>
@@ -92,7 +92,7 @@ document.getElementById('del-form').addEventListener('submit', async (e) => {
   const r = await apiPost('/api/me/delete', { confirm: 'DELETE' });
   btn.classList.remove('busy');
   if (r) {
-    toast(r.removed ? `deleted ${r.removed} records` : 'there was nothing left to delete', 'ok');
+    toast(r.removed ? `deleted ${r.removed} records` + (r.kept_debt ? `, unpaid loans kept in ${r.kept_debt} place${r.kept_debt === 1 ? '' : 's'}` : '') : 'there was nothing left to delete', 'ok');
     setTimeout(() => location.reload(), 900);
   }
 });

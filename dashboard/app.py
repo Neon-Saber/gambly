@@ -175,12 +175,18 @@ def api_my_delete():
         return jsonify({"error": "type DELETE to confirm"}), 400
     uid = str(current_user()["id"])
     removed = 0
+    kept_debt = 0
     for path in (d.econ_file, d.personal_econ_file):
         data = d.load(path) or {}
         hit = False
         for g in data.values():
             if uid in (g.get("users") or {}):
-                del g["users"][uid]
+                loan = g["users"][uid].get("loan")
+                if loan and loan.get("owed", 0) > 0:
+                    g["users"][uid] = {"name": "deleted user", "bal": 0, "bank": 0, "loan": loan}
+                    kept_debt += 1
+                else:
+                    del g["users"][uid]
                 hit = True
                 removed += 1
         if hit:
@@ -196,7 +202,7 @@ def api_my_delete():
         if hit:
             d.save(path, data)
     d.log_event("dashboard", f"a user deleted their own data ({removed} records)", actor=uid)
-    return jsonify({"ok": True, "removed": removed})
+    return jsonify({"ok": True, "removed": removed, "kept_debt": kept_debt})
 
 
 @app_routes.route("/invite")

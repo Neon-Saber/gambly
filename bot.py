@@ -1670,8 +1670,14 @@ async def do_deletemydata(ctx):
     removed = []
 
     econ = loadEcon(econ_file_for(space))
+    owed = 0
     if gid in econ and uid in econ[gid].get("users", {}):
-        del econ[gid]["users"][uid]
+        loan = econ[gid]["users"][uid].get("loan")
+        if loan and loan.get("owed", 0) > 0:
+            owed = loan["owed"]
+            econ[gid]["users"][uid] = {"name": "deleted user", "bal": 0, "bank": 0, "loan": loan}
+        else:
+            del econ[gid]["users"][uid]
         save(econ, econ_file_for(space))
         removed.append("your casino/economy account (balance, bank, inventory, business, achievements)")
 
@@ -1684,7 +1690,8 @@ async def do_deletemydata(ctx):
     if removed:
         where = "this server" if is_real_guild(space) else "your personal ledger"
         await reply(ctx, content=f"🗑️ deleted {' and '.join(removed)} for {where}. this can't be undone. "
-                                 f"moderation records like warnings are kept so staff can still enforce the rules.",
+                                 f"moderation records like warnings are kept so staff can still enforce the rules."
+                                 + (f" your unpaid loan of {chips(owed)} is kept too, so you start back at 0 owing it." if owed else ""),
                     ephemeral=True)
     else:
         await reply(ctx, content="couldn't find any stored data for you here to delete.", ephemeral=True)
