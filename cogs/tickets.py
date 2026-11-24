@@ -4,7 +4,7 @@ creates a private channel (visible only to the opener + staff) under
 whichever category is configured for this guild (dashboard: Moderation &
 Logging -> Ticket category; .env default: TICKET_CATEGORY_ID).
 
-Staff can claim/close from buttons inside the ticket channel. Closing posts
+Staff (or the opener) can close it from the button inside the ticket channel. Closing posts
 a full text transcript to the "ticket" log channel, if that log type is
 enabled for this guild, then deletes the channel.
 
@@ -80,7 +80,7 @@ class TicketPanelView(discord.ui.View):
         embed = discord.Embed(
             title="ticket opened",
             description=f"thanks for reaching out, {member.mention} — staff will be with you shortly.\n"
-                        f"describe your issue below. use the buttons here to **claim** or **close** this ticket.",
+                        f"describe your issue below. use the button here to **close** this ticket when you're done.",
             color=embeds.COLOR_INFO,
         )
         await channel.send(content=f"{ping}{member.mention}", embed=embed, view=TicketControlView())
@@ -92,13 +92,6 @@ class TicketControlView(discord.ui.View):
 
     def __init__(self):
         super().__init__(timeout=None)
-
-    @discord.ui.button(label="Claim", style=discord.ButtonStyle.blurple,
-                       emoji="🙋", custom_id="ticket_panel:claim")
-    async def claim(self, button: discord.ui.Button, interaction: discord.Interaction):
-        if not logging_utils.is_staff(interaction.user):
-            return await interaction.response.send_message("staff only", ephemeral=True)
-        await interaction.response.send_message(f"🙋 **{interaction.user.mention}** claimed this ticket")
 
     @discord.ui.button(label="Close", style=discord.ButtonStyle.red,
                        emoji="🔒", custom_id="ticket_panel:close")
@@ -163,6 +156,12 @@ class Tickets(commands.Cog):
         self._views_registered = True
         self.bot.add_view(TicketPanelView())
         self.bot.add_view(TicketControlView())
+
+    @commands.Cog.listener()
+    async def on_interaction(self, interaction):
+        data = interaction.data or {}
+        if data.get("custom_id") == "ticket_panel:claim" and not interaction.response.is_done():
+            await interaction.response.send_message("claiming tickets was removed, just reply in here", ephemeral=True)
 
     async def _do_ticket_panel(self, ctx, title, description):
         embed = discord.Embed(title=title, description=description, color=embeds.COLOR_INFO)

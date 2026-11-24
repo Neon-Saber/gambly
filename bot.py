@@ -1169,21 +1169,148 @@ class HelpView(discord.ui.View):
                 pass
 
 
-async def send_help(ctx):
+HELP_ALIASES = {
+    "home": ["home", "menu", "pages", "all"],
+    "econ": ["econ", "economy", "eco", "money", "bank", "cash", "chips", "earn"],
+    "games": ["games", "game", "gamble", "gambling", "play"],
+    "shop": ["shop", "shop & biz", "biz", "business", "store", "items"],
+    "server": ["server", "community"],
+    "security": ["security", "mod", "mods", "moderation"],
+    "staff": ["staff", "casino", "admin", "admins", "casino & admin"],
+    "owner": ["owner", "setup"],
+}
+GROUP_WORDS = ("mod", "casino", "admin", "owner", "play")
+
+
+def cat_of(title):
+    t = title.lower()
+    return next((c for c in HELP_CATS if any(t.startswith(w) for w in c[3])), None)
+
+
+def help_items():
+    out = []
+    for title, body in help_sections():
+        cat = cat_of(title)
+        if title.lower().startswith("/play"):
+            line = body.strip("\n").split("\n")[1].split(" - ")[0]
+            names = [n.strip() for n in line.split("·") if n.strip()]
+        else:
+            names = re.findall(r"`([^`]+)`", body)
+        for n in names:
+            out.append((n.lstrip("/!"), n.startswith("/"), title, cat))
+    return out
+
+
+def find_slash(name, parent=None):
+    todo = list(bot.pending_application_commands)
+    while todo:
+        c = todo.pop(0)
+        subs = getattr(c, "subcommands", None)
+        if subs:
+            todo.extend(subs)
+        elif c.name == name and getattr(c, "description", None) and (
+                parent is None or getattr(getattr(c, "parent", None), "name", None) == parent):
+            return c
+    return None
+
+
+def help_lookup(ctx, topic, prefix, cats, in_dm):
+    q = re.sub(r"\s+", " ", topic.lower().strip().lstrip("/!"))
+    allowed = {c[0] for c in cats}
+    for key, words in HELP_ALIASES.items():
+        if q in words or q == key:
+            if key not in allowed:
+                return None, None, "that page is for staff only" if key != "server" else "that page only works in the main server"
+            return help_page(key, prefix, cats, in_dm), key, None
+
+    parts = q.split()
+    if len(parts) > 1 and parts[0] in GROUP_WORDS:
+        parts = parts[1:]
+        q = " ".join(parts)
+    pc = bot.get_command(parts[0]) if parts else None
+    if pc is not None and len(parts) == 1:
+        q = pc.name
+    items = help_items()
+    hits = [i for i in items if i[0] == q or i[0].startswith(q + " ") or i[0].startswith(q + "/")]
+    if not hits:
+        hits = [i for i in items if i[0].split()[0].split("/")[0] == q.split()[0]]
+
+    if not hits:
+        sec = [(t, b) for t, b in help_sections() if t.lower() == q or t.lower().split(" (")[0] == q]
+        if sec:
+            title, body = sec[0]
+            cat = cat_of(title)
+            if cat and cat[0] not in allowed:
+                return None, None, "that one is for staff only"
+            e = discord.Embed(title=f"{cat[1] if cat else '📖'} {title[:1].upper() + title[1:]}", color=0xFF6AD5,
+                              description=body.strip()[:4000])
+            e.set_footer(text=f"{prefix}help for every page")
+            return e, cat[0] if cat else "home", None
+
+    ok = [h for h in hits if h[3] is None or h[3][0] in allowed]
+    if hits and not ok:
+        if all(h[3] and h[3][0] == "server" for h in hits):
+            return None, None, "that command only works in the main server"
+        return None, None, "that command is for staff only, you can't use it"
+
+    qp = q.split()
+    slash = find_slash(qp[1], qp[0]) if len(qp) > 1 else None
+    slash = slash or find_slash(qp[0])
+    if not ok and pc is None and slash is None:
+        names = sorted({i[0].split()[0] for i in items} | {c.name for c in bot.commands})
+        close = __import__("difflib").get_close_matches(q.split()[0], names, n=3, cutoff=0.6)
+        tip = f" did you mean {', '.join(f'`{c}`' for c in close)}?" if close else ""
+        return None, None, f"couldn't find `{topic}`.{tip} try `{prefix}help` for every page"
+
+    name = q if len(qp) > 1 and len(ok) == 1 else qp[0]
+    desc = (slash.description if slash else None) or (pc.help or pc.brief if pc else None) or ""
+    e = discord.Embed(title=f"{'/' if ok and all(h[1] for h in ok) else prefix}{name}", color=0xFF6AD5,
+                      description=desc[:300] or None)
+    usage = []
+    for item, is_slash, title, cat in ok:
+        u = ("/" if is_slash else prefix) + item
+        if " " not in item and pc is not None and pc.signature and pc.name == item:
+            u += " " + pc.signature
+        if u not in usage:
+            usage.append(u)
+    if not usage and pc is not None:
+        usage.append(f"{prefix}{pc.qualified_name} {pc.signature}".strip())
+    if usage:
+        e.add_field(name="usage", value="\n".join(f"`{u}`" for u in usage[:8]), inline=False)
+    where = []
+    for _, _, title, cat in ok:
+        line = f"{cat[1]} {cat[2]} · {title}" if cat else title
+        if line not in where:
+            where.append(line)
+    if where:
+        e.add_field(name="found in", value="\n".join(where[:4]), inline=False)
+    if pc is not None and pc.aliases:
+        e.add_field(name="also works as", value=" · ".join(f"`{prefix}{a}`" for a in pc.aliases[:8]), inline=False)
+    e.set_footer(text="<> needed · [] optional · " + f"{prefix}help for every page")
+    return e, (ok[0][3][0] if ok and ok[0][3] else None), None
+
+
+async def send_help(ctx, topic=None):
     prefix = get_guild_cfg(loadCfg(), ctx.guild).get("prefix", "!") if ctx.guild else "!"
     cats = help_cats_for(ctx.author, ctx.guild)
     in_dm = ctx.guild is None
+    if topic and topic.strip():
+        e, key, err = help_lookup(ctx, topic, prefix, cats, in_dm)
+        if err:
+            return await reply(ctx, content=err, ephemeral=True)
+        view = HelpView(ctx.author.id, prefix, cats, in_dm, current=key) if key and e.footer.text == "buttons work for 3 min" else None
+        return await reply(ctx, embed=e, view=view)
     await reply(ctx, embed=help_page("home", prefix, cats, in_dm), view=HelpView(ctx.author.id, prefix, cats, in_dm))
 
 
 @bot.slash_command(name="help", description="list of everything this bot can do")
-async def help_slash(ctx):
-    await send_help(ctx)
+async def help_slash(ctx, topic: Option(str, "a page or a command, like games or warn", required=False, default=None)):
+    await send_help(ctx, topic)
 
 
 @bot.command(name="help")
-async def help_cmd(ctx):
-    await send_help(ctx)
+async def help_cmd(ctx, *, topic: str = None):
+    await send_help(ctx, topic)
 
 
 # ================= ECONOMY =================
