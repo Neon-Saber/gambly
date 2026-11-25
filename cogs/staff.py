@@ -47,7 +47,7 @@ class Staff(commands.Cog):
         return self.bot.get_cog("Moderation")
 
     @mod.command(name="warn", description="warn someone (logged)")
-    async def warn(self, ctx, member: Option(discord.Member, "who"), reason: Option(str, "why")):
+    async def warn(self, ctx, member: Option(discord.Member, "who"), reason: Option(str, "why", required=False) = None):
         if await gate(ctx, "warn") and await target_ok(ctx, member, "warn"):
             await self.m()._do_warn(ctx, member, reason)
 

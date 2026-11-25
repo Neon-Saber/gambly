@@ -47,7 +47,7 @@ def bot_status_stopped_embed(guild, reason):
     look between the two states."""
     embed = _base_embed(f"{guild.name} status", COLOR_SEVERE)
     embed.description = "🔴 **Stopped**"
-    embed.add_field(name="reason", value=reason or "no reason given", inline=False)
+    embed.add_field(name="reason", value=reason or "no reason provided", inline=False)
     if guild.icon:
         embed.set_thumbnail(url=guild.icon.url)
     embed.set_footer(text="will post a fresh status once it's back up")
@@ -60,7 +60,7 @@ def mod_action_embed(action_title, member, moderator, reason=None, color=COLOR_I
     embed = _base_embed(action_title, color)
     user_field(embed, "user", member)
     user_field(embed, "moderator", moderator)
-    embed.add_field(name="reason", value=reason or "no reason given", inline=False)
+    embed.add_field(name="reason", value=reason or "no reason provided", inline=False)
     if extra:
         for k, v in extra.items():
             embed.add_field(name=k, value=str(v), inline=True)

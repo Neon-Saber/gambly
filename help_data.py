@@ -133,7 +133,7 @@ STAFF_GUIDE = [
     ]),
     ("🔨 handing out punishments", [
         ("usual order", "talk → `warn` → `mute` → `kick` → `ban`. skip steps for spam bots, slurs, NSFW or raids."),
-        ("always give a reason", "every action is logged with its reason in mod logs. \"no reason\" doesn't cut it."),
+        ("give a reason", "reasons are optional, but every action is logged in mod logs and a real reason saves arguments later. leave it out and it says \"no reason provided\"."),
         ("chips", "never give, take or reset chips as a punishment unless it's for cheating or alts. casino staff handle that with `/casino`."),
     ]),
     ("📍 where to run things", [

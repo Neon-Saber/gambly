@@ -38,6 +38,8 @@ import cog_utils as cu
 import perms
 import store
 
+NO_REASON = "no reason provided"
+
 WARNINGS_FILE = Path(__file__).parent.parent / "warnings.json"
 MAX_TIMEOUT_SECONDS = 28 * 86400  # Discord's own timeout cap
 MAX_SLOWMODE_SECONDS = 21600  # Discord's own slowmode cap (6h)
@@ -83,7 +85,7 @@ class Moderation(commands.Cog):
         try:
             embed = discord.Embed(
                 title=f"you were {action} in {guild_name}",
-                description=f"**reason:** {reason or 'no reason given'}",
+                description=f"**reason:** {reason or NO_REASON}",
                 color=embeds.COLOR_SEVERE,
             )
             await member.send(embed=embed)
@@ -102,12 +104,13 @@ class Moderation(commands.Cog):
 
     # ---------------------------------------------------------------- kick --
     async def _do_kick(self, ctx, member, reason):
+        reason = (reason or "").strip() or NO_REASON
         if not await self._require_hierarchy(ctx, member, "kick"):
             return
         await self.dm_notice(member, ctx.guild.name, "kicked", reason)
-        await ctx.guild.kick(member, reason=f"{ctx.author} ({ctx.author.id}): {reason or 'no reason'}")
+        await ctx.guild.kick(member, reason=f"{ctx.author} ({ctx.author.id}): {reason}")
         await self.log(ctx.guild, "member kicked", member, reason, color=embeds.COLOR_SEVERE, moderator=ctx.author)
-        await cu.respond(ctx, f"👢 kicked **{member}**" + (f" — {reason}" if reason else ""))
+        await cu.respond(ctx, f"👢 kicked **{member}**" + f" — {reason}")
 
     @commands.slash_command(name="kick", description="kick a member from the server")
     @staff_check()
@@ -122,6 +125,7 @@ class Moderation(commands.Cog):
 
     # ----------------------------------------------------------------- ban --
     async def _do_ban(self, ctx, user, reason, delete_days=0):
+        reason = (reason or "").strip() or NO_REASON
         member = None
         try:
             member = await commands.MemberConverter().convert(ctx, user)
@@ -132,7 +136,7 @@ class Moderation(commands.Cog):
             if not await self._require_hierarchy(ctx, member, "ban"):
                 return
             await self.dm_notice(member, ctx.guild.name, "banned", reason)
-            await ctx.guild.ban(member, reason=f"{ctx.author} ({ctx.author.id}): {reason or 'no reason'}",
+            await ctx.guild.ban(member, reason=f"{ctx.author} ({ctx.author.id}): {reason}",
                                 delete_message_days=delete_days)
             target_display = member
         else:
@@ -141,12 +145,12 @@ class Moderation(commands.Cog):
             except ValueError:
                 return await cu.respond(ctx, "couldn't find that member and it's not a valid user ID either", ephemeral=True)
             await ctx.guild.ban(discord.Object(id=user_id),
-                                reason=f"{ctx.author} ({ctx.author.id}): {reason or 'no reason'}",
+                                reason=f"{ctx.author} ({ctx.author.id}): {reason}",
                                 delete_message_days=delete_days)
             target_display = await self.bot.fetch_user(user_id)
 
         await self.log(ctx.guild, "member banned", target_display, reason, color=embeds.COLOR_SEVERE, moderator=ctx.author)
-        await cu.respond(ctx, f"🔨 banned **{target_display}**" + (f" — {reason}" if reason else ""))
+        await cu.respond(ctx, f"🔨 banned **{target_display}**" + f" — {reason}")
 
     @commands.slash_command(name="ban", description="ban a member (or a raw user ID) from the server")
     @staff_check()
@@ -185,17 +189,18 @@ class Moderation(commands.Cog):
 
     # ------------------------------------------------------------- timeout --
     async def _do_mute(self, ctx, member, seconds, reason):
+        reason = (reason or "").strip() or NO_REASON
         if not await self._require_hierarchy(ctx, member, "mute"):
             return
         cap = perms.mute_cap(ctx.author)
         if seconds > cap:
             return await cu.respond(ctx, f"your rank can mute for {cu.format_duration(cap)} max", ephemeral=True)
         until = discord.utils.utcnow() + timedelta(seconds=seconds)
-        await member.timeout(until, reason=f"{ctx.author} ({ctx.author.id}): {reason or 'no reason'}")
+        await member.timeout(until, reason=f"{ctx.author} ({ctx.author.id}): {reason}")
         human = cu.format_duration(seconds)
         await self.log(ctx.guild, "member muted", member, reason, color=embeds.COLOR_WARN,
                         extra={"duration": human}, moderator=ctx.author)
-        await cu.respond(ctx, f"🔇 muted **{member}** for {human}" + (f" — {reason}" if reason else ""))
+        await cu.respond(ctx, f"🔇 muted **{member}** for {human}" + f" — {reason}")
 
     @commands.slash_command(name="mute", description="timeout a member so they can't send messages/talk for a while")
     @staff_check()
@@ -240,6 +245,7 @@ class Moderation(commands.Cog):
 
     # -------------------------------------------------------------- warns --
     async def _do_warn(self, ctx, member, reason):
+        reason = (reason or "").strip() or NO_REASON
         if not await self._require_hierarchy(ctx, member, "warn"):
             return
         data = load_warnings()
@@ -255,12 +261,12 @@ class Moderation(commands.Cog):
 
     @commands.slash_command(name="warn", description="log a warning against a member")
     @staff_check()
-    async def warn(self, ctx, member: Option(discord.Member, "who"), reason: Option(str, "why")):
+    async def warn(self, ctx, member: Option(discord.Member, "who"), reason: Option(str, "why", required=False) = None):
         await self._do_warn(ctx, member, reason)
 
     @commands.command(name="warn")
     @staff_check()
-    async def warn_cmd(self, ctx, member: discord.Member, *, reason: str):
+    async def warn_cmd(self, ctx, member: discord.Member, *, reason: str = None):
         await self._do_warn(ctx, member, reason)
 
     async def _do_warnings(self, ctx, member):
@@ -395,13 +401,14 @@ class Moderation(commands.Cog):
 
     # --------------------------------------------------------- lock/unlock --
     async def _do_lock(self, ctx, reason):
+        reason = (reason or "").strip() or NO_REASON
         overwrite = ctx.channel.overwrites_for(ctx.guild.default_role)
         overwrite.send_messages = False
         await ctx.channel.set_permissions(ctx.guild.default_role, overwrite=overwrite,
                                            reason=f"locked by {ctx.author}")
         await self.log(ctx.guild, "channel locked", ctx.author, reason, color=embeds.COLOR_WARN,
                         extra={"channel": ctx.channel.mention}, moderator=ctx.author)
-        await cu.respond(ctx, f"🔒 locked {ctx.channel.mention}" + (f" — {reason}" if reason else ""))
+        await cu.respond(ctx, f"🔒 locked {ctx.channel.mention}" + f" — {reason}")
 
     @commands.slash_command(name="lock", description="stop @everyone sending messages in this channel")
     @staff_check()
