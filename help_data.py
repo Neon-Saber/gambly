@@ -55,7 +55,7 @@ HELP_TEXT = (
     "`role give/take` (pit boss+ for staff ranks) · `ticket-panel` · `announce-channel` · `diag` · `test-welcome` · "
     "`test-levelup` · `prefix` (pit boss+)\n\n"
     "**owner** (`/owner` + `/setup` - the server owner only)\n"
-    "`/setup build` · `/setup roles` · `/setup restyle` · `/setup preview` · `/setup undo` · `/owner managers` · "
+    "`/setup build` · `/setup roles` · `/setup restyle` · `/setup preview` · `/setup undo` · `/setup onboarding` · `/owner managers` · "
     "`/owner testmode` · `/owner wipe-economy`\n\n"
     "**rules for staff**\n"
     "you can't act on anyone ranked the same as you or higher. 😴 On Break turns your staff commands off till you take it off. "

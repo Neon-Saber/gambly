@@ -9,6 +9,76 @@ import config_schema as cfgschema
 import embeds
 import server_layout as sl
 import store
+from discord.http import Route
+
+DEFAULT_CHANNELS = ["start:welcome", "start:rules", "start:announcements", "start:roles", "start:faq",
+                    "casino:casino-guide", "support:open-a-ticket", "community:general", "community:media",
+                    "community:memes", "community:bot-commands", "earn:daily", "earn:work"]
+NOT_TABLES = {"casino:casino-guide", "casino:level-ups", "casino:big-wins"}
+
+
+def onboarding_payload(gcfg, exists=lambda cid: True):
+    layout = gcfg.get("server_layout") or {}
+    kr = (gcfg.get("role_kit") or {}).get("roles") or {}
+    by_key = {}
+    for cid, v in (layout.get("channels") or {}).items():
+        if exists(int(cid)):
+            by_key[v["key"]] = cid
+    sec = {}
+    for key, cid in by_key.items():
+        sec.setdefault(key.split(":")[0], []).append((key, cid))
+    base = discord.utils.time_snowflake(discord.utils.utcnow())
+    ids = iter(range(base, base + 999))
+    nid = lambda: str(next(ids))
+
+    def chans(keys):
+        return [by_key[k] for k in keys if k in by_key]
+
+    def role(k):
+        rid = kr.get(k)
+        return [rid] if rid else []
+
+    def opt(title, emoji, channels=(), roles=(), desc=None):
+        channels, roles = list(dict.fromkeys(channels)), list(dict.fromkeys(roles))
+        if not channels and not roles:
+            return None
+        o = {"id": nid(), "title": title[:50], "emoji_name": emoji, "channel_ids": channels, "role_ids": roles}
+        if desc:
+            o["description"] = desc[:100]
+        return o
+
+    tables = [cid for key, cid in sec.get("casino", []) if key not in NOT_TABLES]
+    earn = [cid for _, cid in sec.get("earn", [])]
+    hang = chans(["community:general", "community:media", "community:memes", "community:fan-art",
+                  "community:self-promo", "community:suggestions", "community:bot-commands",
+                  "voice:general-vc", "voice:chill-vc", "voice:gaming-vc"])
+    events = chans(["start:giveaways", "casino:big-wins"])
+    prompts = []
+
+    def prompt(title, options, single=False, required=False, dropdown=False):
+        options = [o for o in options if o]
+        if options:
+            prompts.append({"id": nid(), "type": 1 if dropdown else 0, "title": title, "options": options,
+                            "single_select": single, "required": required, "in_onboarding": True})
+
+    prompt("what are you here for?", [
+        opt("casino games", "🎰", tables, desc="every game table"),
+        opt("earning chips", "💸", earn, desc="daily, work, gathering, trivia, bank, shop"),
+        opt("hanging out", "💬", hang, desc="chat, memes, media and voice"),
+        opt("events & giveaways", "🎉", events, role("pings:giveaways") + role("pings:events") + role("pings:gamenight"),
+            desc="giveaways and casino events, with pings"),
+    ], required=True)
+
+    def kit_prompt(gkey, title, single=False, dropdown=False):
+        gdef = next(g for g in sl.ROLE_KIT if g["key"] == gkey)
+        prompt(title, [opt(r["name"], r.get("emoji") or "✨", roles=role(f"{gkey}:{r['slug']}")) for r in gdef["roles"]],
+               single=single, dropdown=dropdown)
+
+    kit_prompt("pings", "what do you want pings for?")
+    kit_prompt("colors", "pick a name color", single=True, dropdown=True)
+    kit_prompt("pronouns", "pronouns")
+    kit_prompt("platforms", "what do you play on?")
+    return {"prompts": prompts, "default_channel_ids": chans(DEFAULT_CHANNELS), "enabled": True, "mode": 0}
 
 async def update_cfg(guild_id, fn):
     async with store.locked(cfgschema.CFG_FILE):
@@ -848,6 +918,37 @@ class ServerSetup(commands.Cog):
         await ctx.respond(f"⚠️ this deletes **{ch}** channels, **{cats}** categories and **{roles}** roles that `/setup` made, "
                           "**including every message in those channels**. channels and roles that were already here stay. "
                           "this can't be reversed.", view=ConfirmUndo(self, ctx.author), ephemeral=True)
+
+    async def apply_onboarding(self, guild):
+        if "COMMUNITY" not in guild.features:
+            return "❌ turn on Community first: Server Settings → Enable Community, then run this again"
+        if not guild.me.guild_permissions.manage_guild or not guild.me.guild_permissions.manage_roles:
+            return "❌ I need **Manage Server** and **Manage Roles** for this"
+        payload = onboarding_payload(read_cfg(guild.id), lambda cid: guild.get_channel(cid) is not None)
+        if len(payload["default_channel_ids"]) < 7:
+            return "❌ run `/setup build` first, onboarding needs the channels it makes"
+        route = Route("PUT", "/guilds/{guild_id}/onboarding", guild_id=guild.id)
+        try:
+            await self.bot.http.request(route, json=payload)
+        except discord.HTTPException as e:
+            if "emoji" not in str(e.text or e).lower():
+                return f"❌ Discord said no: {e.text or e}"[:1900]
+            for q in payload["prompts"]:
+                for o in q["options"]:
+                    o.pop("emoji_name", None)
+            try:
+                await self.bot.http.request(route, json=payload)
+            except discord.HTTPException as e2:
+                return f"❌ Discord said no: {e2.text or e2}"[:1900]
+        qs = payload["prompts"]
+        return (f"✅ onboarding is on - **{len(payload['default_channel_ids'])}** default channels and **{len(qs)}** questions "
+                f"({', '.join(q['title'] for q in qs)}).\n"
+                "last bit is yours: Server Settings → Onboarding → Server Guide, Discord doesn't let bots fill that in")
+
+    @setup_group.command(name="onboarding", description="set up Discord onboarding questions and default channels")
+    async def setup_onboarding(self, ctx):
+        await ctx.defer(ephemeral=True)
+        await ctx.respond(await self.apply_onboarding(ctx.guild), ephemeral=True)
 
     async def _roles_prompt(self, ctx, groups_raw, channel, send):
         raw = (groups_raw or "all").lower().replace(",", " ").split()
