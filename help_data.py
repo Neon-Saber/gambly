@@ -90,7 +90,7 @@ FAQ = [
     ("Where do I use commands?",
      "In the bot commands channel, or the channel made for that thing: daily and quests in daily, work and crime in work, deposits and loans in bank, buying stuff in shop, and every game at its own table. If you use one in the wrong place the bot tells you where it goes."),
     ("Why did my command get deleted in general?",
-     "Chat and media channels like general, media and memes are for talking, so commands there get removed and the bot points you to bot commands. Staff can still use their commands anywhere."),
+     "Chat and media channels like general, media and memes are for talking, so commands there get removed and the bot points you to bot commands. Staff commands like warn and purge work anywhere, but games and earning go in their channels for everyone, staff included."),
     ("Can I add the bot to my own server?",
      "Not as a server bot. It's locked to one server and leaves anywhere else. You can still use the personal app to play anywhere."),
 ]
@@ -137,7 +137,7 @@ STAFF_GUIDE = [
         ("chips", "never give, take or reset chips as a punishment unless it's for cheating or alts. casino staff handle that with `/casino`."),
     ]),
     ("📍 where to run things", [
-        ("staff commands", "you can run your commands anywhere, members can't. keep big stuff in staff commands so chat stays clean."),
+        ("staff commands", "your staff commands work in any channel. games and earning commands still go in their own channels, same as everyone else."),
         ("chat channels", "general, media, memes and the rest are command-free for members, the bot deletes theirs and points them to bot commands."),
         ("help", "`/help warn` (or any command) shows exactly how it works. `/mod ranks` lists what every rank can do."),
     ]),

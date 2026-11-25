@@ -451,6 +451,9 @@ async def _game_channel_check(ctx):
 bot.add_check(_game_channel_check)
 
 ANYWHERE = {"report", "Report Message", "close-ticket", "deletemydata"}
+STAFF_TOPS = {"mod", "casino", "admin", "owner", "setup"}
+STAFF_ONLY = {"welcome", "level", "diag", "testmode", "reset", "setbalance", "setmanager", "setprefix", "setannounce",
+              "addchips", "removechips", "banuser", "unbanuser", "forgive", "giveaway", "wipe-economy", "status"}
 
 
 async def _channel_rules_check(ctx):
@@ -462,10 +465,11 @@ async def _channel_rules_check(ctx):
     if not quiet and not homes:
         return True
     import perms
-    if perms.tier_of(ctx.author) >= 1 or perms.sides(ctx.author):
-        return True
     name = ctx.command.name
     top = ctx.command.qualified_name.split()[0]
+    if top in STAFF_TOPS or name in STAFF_ONLY or name in perms.MOD_TIERS or name in perms.CASINO_CMDS \
+            or name in perms.HOST_CMDS:
+        return True
     here = str(getattr(ctx.channel, "parent_id", None) or ctx.channel.id) if isinstance(ctx.channel, discord.Thread) else str(ctx.channel.id)
     home = homes.get(name) or homes.get(top)
     if home and ctx.guild.get_channel(int(home)) is None:
