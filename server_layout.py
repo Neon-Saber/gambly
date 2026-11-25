@@ -360,11 +360,6 @@ ROLE_KIT = [
         {"slug": "any", "name": "any pronouns", "emoji": "🤍"},
         {"slug": "ask", "name": "ask my pronouns", "emoji": "💬"},
     ]},
-    {"key": "platforms", "title": "Platforms", "emoji": "🎮", "self": True, "blurb": "what do you play on?", "roles": [
-        {"slug": "pc", "name": "PC", "emoji": "🖥️"},
-        {"slug": "console", "name": "Console", "emoji": "🎮"},
-        {"slug": "mobile", "name": "Mobile", "emoji": "📱"},
-    ]},
 ]
 ROLE_KIT_KEYS = [g["key"] for g in ROLE_KIT]
 
@@ -409,4 +404,4 @@ def role_perms(gkey, r):
         out += STAFF_BASE
     out += EXTRA_PERMS.get(f"{gkey}:{r.get('slug')}", [])
     return list(dict.fromkeys(out))
-ROLE_ORDER = ["staff", "security", "crew", "special", "colors", "rebirths", "levels", "pings", "pronouns", "platforms"]
+ROLE_ORDER = ["staff", "security", "crew", "special", "colors", "rebirths", "levels", "pings", "pronouns"]

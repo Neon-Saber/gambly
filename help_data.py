@@ -37,7 +37,7 @@ HELP_TEXT = (
     "open a ticket from the ticket panel · `close-ticket` inside it · `report <member> <reason>` or right click a "
     "message → Apps → Report Message\n\n"
     "**roles**\n"
-    "grab colors, pings, pronouns and platforms from the buttons in the roles channel\n\n"
+    "grab colors, pings and pronouns from the buttons in the roles channel\n\n"
     "**security · trial+** (`/mod`)\n"
     "`warn` · `warnings` · `mute` · `unmute` · `purge` · `ticket-add` · `ranks`\n"
     "mutes max 1h and purges max 25 until security\n\n"

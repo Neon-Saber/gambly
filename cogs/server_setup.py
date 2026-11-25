@@ -77,7 +77,6 @@ def onboarding_payload(gcfg, exists=lambda cid: True):
     kit_prompt("pings", "what do you want pings for?")
     kit_prompt("colors", "pick a name color", single=True, dropdown=True)
     kit_prompt("pronouns", "pronouns")
-    kit_prompt("platforms", "what do you play on?")
     return {"prompts": prompts, "default_channel_ids": chans(DEFAULT_CHANNELS), "enabled": True, "mode": 0}
 
 async def update_cfg(guild_id, fn):
@@ -928,22 +927,30 @@ class ServerSetup(commands.Cog):
         if len(payload["default_channel_ids"]) < 7:
             return "❌ run `/setup build` first, onboarding needs the channels it makes"
         route = Route("PUT", "/guilds/{guild_id}/onboarding", guild_id=guild.id)
-        try:
-            await self.bot.http.request(route, json=payload)
-        except discord.HTTPException as e:
-            if "emoji" not in str(e.text or e).lower():
-                return f"❌ Discord said no: {e.text or e}"[:1900]
-            for q in payload["prompts"]:
-                for o in q["options"]:
-                    o.pop("emoji_name", None)
+        moved = []
+        for _ in range(len(payload["prompts"]) + 2):
             try:
                 await self.bot.http.request(route, json=payload)
-            except discord.HTTPException as e2:
-                return f"❌ Discord said no: {e2.text or e2}"[:1900]
-        qs = payload["prompts"]
+                break
+            except discord.HTTPException as e:
+                why = str(e.text or e)
+                live = [q for q in payload["prompts"] if q["in_onboarding"]]
+                if "too many" in why.lower() and len(live) > 1:
+                    live[-1]["in_onboarding"] = False
+                    moved.insert(0, live[-1]["title"])
+                elif "emoji" in why.lower() and any("emoji_name" in o for q in payload["prompts"] for o in q["options"]):
+                    for q in payload["prompts"]:
+                        for o in q["options"]:
+                            o.pop("emoji_name", None)
+                else:
+                    return f"❌ Discord said no: {why}"[:1900]
+        else:
+            return "❌ Discord kept saying no, try again in a bit"
+        qs = [q for q in payload["prompts"] if q["in_onboarding"]]
         return (f"✅ onboarding is on - **{len(payload['default_channel_ids'])}** default channels and **{len(qs)}** questions "
                 f"({', '.join(q['title'] for q in qs)}).\n"
-                "last bit is yours: Server Settings → Onboarding → Server Guide, Discord doesn't let bots fill that in")
+                + (f"too many for the join screen, so these are only in Channels & Roles: {', '.join(moved)}\n" if moved else "")
+                + "last bit is yours: Server Settings → Onboarding → Server Guide, Discord doesn't let bots fill that in")
 
     @setup_group.command(name="onboarding", description="set up Discord onboarding questions and default channels")
     async def setup_onboarding(self, ctx):
