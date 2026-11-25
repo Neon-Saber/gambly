@@ -2997,8 +2997,7 @@ async def roulette_cmd(ctx, amount: Amount, choice: str):
 
 # ================= ALL IN =================
 # quick shortcut for people who don't wanna type out their whole balance -
-# just red/black on the wheel, no numbers/green since that'd basically never
-# hit and would just be a rage-quit generator. confirm button so a misclick
+# red/black pays 2x, green pays 35x like roulette. confirm button so a misclick
 # doesn't nuke someone's whole stack
 class AllInConfirm(discord.ui.View):
     def __init__(self, author, guild, choice, bet):
@@ -3029,7 +3028,7 @@ class AllInConfirm(discord.ui.View):
     async def confirm(self, b, i):
         spin = random.randint(0, 36)
         color = roulette_color(spin)
-        won = self.bet * 2 if self.choice == color else 0
+        won = (self.bet * 35 if color == "green" else self.bet * 2) if self.choice == color else 0
 
         async with store.locked(econ_file_for(self.guild)):
             econ = loadEcon(econ_file_for(self.guild))  # reload, balance mighta changed since the confirm popped up
@@ -3057,8 +3056,8 @@ async def do_allin(ctx, choice):
         await reply(ctx, content="you're banned from gambling here", ephemeral=True)
         return
     choice = choice.lower().strip()
-    if choice not in ("red", "black"):
-        await reply(ctx, content="allin only does red or black", ephemeral=True)
+    if choice not in ("red", "black", "green"):
+        await reply(ctx, content="allin does red, black or green", ephemeral=True)
         return
     econ = loadEcon(econ_file_for(space))
     a = acct(econ, space, ctx.author)
@@ -3066,11 +3065,12 @@ async def do_allin(ctx, choice):
         await reply(ctx, content="you're broke, nothing to bet", ephemeral=True)
         return
     view = AllInConfirm(ctx.author, space, choice, a["bal"])
-    await reply(ctx, content=f"betting your entire stack ({chips(a['bal'])}) on **{choice}**. you sure?", view=view)
+    odds = " green hits 1 in 37 times and pays 35x." if choice == "green" else ""
+    await reply(ctx, content=f"betting your entire stack ({chips(a['bal'])}) on **{choice}**.{odds} you sure?", view=view)
 
 
-@bot.slash_command(name="allin", description="bet your entire balance on red or black")
-async def allin(ctx, choice: Option(str, "red or black", choices=["red", "black"])):
+@bot.slash_command(name="allin", description="bet your entire balance on red, black or green")
+async def allin(ctx, choice: Option(str, "red or black pays 2x, green pays 35x", choices=["red", "black", "green"])):
     await do_allin(ctx, choice)
 
 

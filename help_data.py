@@ -13,7 +13,7 @@ HELP_TEXT = (
     "`deletemydata` wipes your game account and level for good, no staff needed. warnings, other moderation records and unpaid loans stay\n\n"
     "**classic games**\n"
     "`coinflip <amt> <heads/tails>` · `slots <amt>` · `jackpot` · `dice <amt> <1-6>` · `roulette <amt> <red/black/green/0-36>` · "
-    "`allin <red/black>` · `blackjack <amt>` · `war <amt>` · `hilo <amt>` · `crash <amt> <x>` · `mines <amt> [mines]` · "
+    "`allin <red/black/green>` · `blackjack <amt>` · `war <amt>` · `hilo <amt>` · `crash <amt> <x>` · `mines <amt> [mines]` · "
     "`plinko <amt>` · `horserace <amt> <horse>` · `scratch` · `wheel <amt>` · `keno <amt> <numbers>` · "
     "`baccarat <amt> <player/banker/tie>` · `rps <amt> <pick>` · `ladder <amt> <1-6>`\n\n"
     "**/play games** (or just `!<game>`)\n"
