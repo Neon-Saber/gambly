@@ -4751,8 +4751,38 @@ bot.casino.__dict__.update(
     do_ban=do_ban, do_reset=do_reset, do_reset_all=do_reset_all, do_setannounce=do_setannounce,
     do_setprefix=do_setprefix, do_testmode=do_testmode, ManagerPicker=ManagerPicker)
 from cogs.staff import strip_moved
+SHORT = {
+    "achievements": ["ach"], "add-to-ticket": ["addticket", "ta"], "addchips": ["ac", "addc"], "allin": ["ai"],
+    "balloon": ["bln"], "banuser": ["bu"], "bingo": ["bg"], "bounties": ["bts"], "bounty": ["bty"],
+    "buybusiness": ["bb", "buybiz"], "buyticket": ["bt"], "buyupgrade": ["bup", "buyup"], "clearwarns": ["cw"],
+    "close-ticket": ["close", "ct"], "coinflip": ["flip"], "collect": ["coll"], "crime": ["cr"], "daily": ["d"],
+    "debtors": ["debt"], "deletemydata": ["deldata"], "forgive": ["fg"], "giveaway": ["gw"], "help": ["h", "commands"],
+    "hilo": ["hl"], "horserace": ["hr"], "invest": ["iv"], "jackpot": ["jp"], "ladder": ["lad"], "level": ["lvl"],
+    "levels": ["lvls"], "lottery": ["lotto"], "monthly": ["mo"], "plinko": ["pl"], "purge": ["clear", "prune"],
+    "quests": ["q"], "rebirth": ["rb"], "removechips": ["rc", "remc"], "repay": ["rp"], "rocket": ["rkt"],
+    "scratch": ["sc"], "setannounce": ["setann"], "setmanager": ["setmgr"], "setprefix": ["prefix"],
+    "shop": ["store"], "sicbo": ["sb"], "slowmode": ["sm"], "stats": ["st"], "testmode": ["tm"],
+    "ticket-panel": ["tpanel"], "trivia": ["triv"], "unbanuser": ["ubu"], "unmute": ["um"], "upgrades": ["upg", "ups"],
+    "warnings": ["warns", "ws"], "weekly": ["wk"], "work": ["w"], "inventory": ["items"], "leaderboard": ["top"],
+}
+
+
+def add_short_names():
+    for name, extra in SHORT.items():
+        c = bot.get_command(name)
+        if c is None:
+            continue
+        new = [a for a in extra if a not in bot.all_commands]
+        if not new:
+            continue
+        bot.remove_command(c.name)
+        c.aliases = list(c.aliases) + new
+        bot.add_command(c)
+
+
 strip_moved(bot)
 scope_commands()
+add_short_names()
 
 
 if __name__ == "__main__":

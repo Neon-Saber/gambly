@@ -6,7 +6,7 @@ import cog_utils as cu
 import perms
 import server_layout as sl
 
-MOVED = ["kick", "ban", "unban", "mute", "unmute", "warn", "warnings", "clearwarnings", "purge", "slowmode",
+MOVED = ["kick", "ban", "unban", "mute", "unmute", "warn", "warnings", "clearwarns", "purge", "slowmode",
          "lock", "unlock", "ticket-panel", "add-to-ticket", "diag", "welcome", "level", "setmanager", "setprefix",
          "addchips", "removechips", "banuser", "unbanuser", "reset", "setbalance", "setannounce", "forgive", "giveaway"]
 
@@ -104,9 +104,9 @@ class Staff(commands.Cog):
         if await gate(ctx, "unlock"):
             await self.m()._do_unlock(ctx)
 
-    @mod.command(name="clearwarnings", description="wipe someone's warnings")
+    @mod.command(name="clearwarns", description="wipe someone's warnings")
     async def clearwarnings(self, ctx, member: Option(discord.Member, "who")):
-        if await gate(ctx, "clearwarnings") and await target_ok(ctx, member, "clear warnings for"):
+        if await gate(ctx, "clearwarns") and await target_ok(ctx, member, "clear warnings for"):
             await self.m()._do_clearwarnings(ctx, member)
 
     @mod.command(name="ban", description="ban someone (mention, name or id)")

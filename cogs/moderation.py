@@ -301,12 +301,12 @@ class Moderation(commands.Cog):
         await self.log(ctx.guild, "warnings cleared", member, None, color=embeds.COLOR_INFO, moderator=ctx.author)
         await cu.respond(ctx, f"🧹 cleared warnings for **{member}**" if had_any else f"**{member}** had no warnings")
 
-    @commands.slash_command(name="clearwarnings", description="wipe a member's warning history")
+    @commands.slash_command(name="clearwarns", description="wipe a member's warning history")
     @staff_check()
     async def clearwarnings(self, ctx, member: Option(discord.Member, "who")):
         await self._do_clearwarnings(ctx, member)
 
-    @commands.command(name="clearwarnings")
+    @commands.command(name="clearwarns", aliases=["clearwarnings"])
     @staff_check()
     async def clearwarnings_cmd(self, ctx, member: discord.Member):
         await self._do_clearwarnings(ctx, member)

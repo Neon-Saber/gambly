@@ -46,7 +46,7 @@ HELP_TEXT = (
     "**security · security+**\n"
     "`kick` · `lock` · `unlock` - mutes up to 1d (senior 7d, head 28d)\n\n"
     "**security · senior+**\n"
-    "`clearwarnings`\n\n"
+    "`clearwarns`\n\n"
     "**security · head+**\n"
     "`ban` · `unban`\n\n"
     "**casino staff** (`/casino` - dealers + floor managers)\n"

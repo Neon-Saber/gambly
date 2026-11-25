@@ -14,7 +14,7 @@ MOD_TIERS = {
     "warn": 1, "warnings": 1, "mute": 1, "unmute": 1, "purge": 1, "add-to-ticket": 1,
     "slowmode": 2,
     "kick": 3, "lock": 3, "unlock": 3,
-    "clearwarnings": 4,
+    "clearwarns": 4,
     "ban": 5, "unban": 5,
     "diag": 6, "ticket-panel": 6, "setannounce": 6, "role": 6, "test-welcome": 6, "test-levelup": 6,
     "setprefix": 7,
